@@ -3,6 +3,8 @@
   "name": "milkcompass-collector",
   "main": "workers/collection/index.ts",
   "compatibility_date": "2026-09-01",
+  // The collector serves no HTTP routes; keep any accidental route off too.
+  "workers_dev": false,
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
     "crons": ["0 6 * * *"]
