@@ -1,7 +1,7 @@
 import type { MilkSnapshot } from "../lib/snapshot";
 import styles from "./page.module.css";
 
-const announcementDate = new Intl.DateTimeFormat("en-NZ", {
+const nzDate = new Intl.DateTimeFormat("en-NZ", {
   timeZone: "Pacific/Auckland",
   day: "numeric",
   month: "short",
@@ -33,7 +33,7 @@ export default function ComparisonView({
         )}
       </main>
       <footer className={styles.footer}>
-        <p>Development preview — figures are sample data, not live prices.</p>
+        <p>Development preview — data is a frozen fixture, not live prices.</p>
       </footer>
     </div>
   );
@@ -59,7 +59,16 @@ function ComparisonCards({ snapshot }: { snapshot: MilkSnapshot }) {
             : "No published range"}
         </p>
         <p className={styles.meta}>
-          Announced {announcementDate.format(new Date(official.announcedAt))}
+          Announced {nzDate.format(new Date(official.announcedAt))}
+        </p>
+        {official.noChangeUpdate && (
+          <p className={styles.meta}>
+            Latest update {nzDate.format(new Date(official.noChangeUpdate.date))}:
+            no change
+          </p>
+        )}
+        <p className={styles.meta}>
+          Checked {nzDate.format(new Date(official.retrievedAt))}
         </p>
         <a className={styles.sourceLink} href={official.sourceUrl}>
           View official source

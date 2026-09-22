@@ -55,13 +55,40 @@ describe("official forecast card", () => {
   it("shows the published range", () => {
     view();
 
-    expect(screen.getByText("Range $9.00-$10.00 /kgMS")).toBeDefined();
+    expect(screen.getByText("Range $8.50-$10.50 /kgMS")).toBeDefined();
   });
 
   it("shows the announcement date", () => {
     view();
 
-    expect(screen.getByText("Announced 28 Aug 2026")).toBeDefined();
+    expect(screen.getByText("Announced 21 Sept 2026")).toBeDefined();
+  });
+
+  it("shows the last successful source check", () => {
+    view();
+
+    expect(screen.getByText("Checked 23 Sept 2026")).toBeDefined();
+  });
+
+  it("notes when the latest announcement left the forecast unchanged", () => {
+    render(
+      <ComparisonView
+        snapshot={{
+          ...snapshot,
+          official: {
+            ...snapshot.official,
+            noChangeUpdate: { date: "2026-09-05" },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === "Latest update 5 Sept 2026: no change",
+      ),
+    ).toBeDefined();
   });
 
   it("links to the official source", () => {

@@ -45,13 +45,13 @@
 **Description:** Adapt the existing Fonterra parser, validate the current season and published range, and display its values with source provenance.
 
 **Acceptance criteria:**
-- [ ] Current-season midpoint, low, high, announcement date, and source are parsed when published.
-- [ ] Footnote ranges and `No Change` updates are handled explicitly.
-- [ ] Invalid or changed markup produces a visible unavailable state rather than fabricated values.
+- [x] Current-season midpoint, low, high, announcement date, and source are parsed when published.
+- [x] Footnote ranges and `No Change` updates are handled explicitly.
+- [x] Invalid or changed markup produces a visible unavailable state rather than fabricated values.
 
 **Verification:**
-- [ ] Run parser fixture tests for complete, missing-range, no-change, and malformed documents.
-- [ ] Confirm the source-to-page flow in the local Workers preview.
+- [x] Run parser fixture tests for complete, missing-range, no-change, and malformed documents.
+- [x] Confirm the source-to-page flow in the local Workers preview.
 
 **Dependencies:** Task 2
 

@@ -75,11 +75,33 @@ describe("readLatestSnapshot", () => {
     const snapshot = await readLatestSnapshot(
       bucketWith({
         ...fixture,
-        official: { ...fixture.official, low: null, high: null },
+        official: { ...fixture.official, low: null, high: null, rangeSource: "none" },
       }),
     );
 
     expect(snapshot?.official.low).toBeNull();
     expect(snapshot?.official.high).toBeNull();
+  });
+
+  it("returns null when rangeSource disagrees with the endpoints", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        official: { ...fixture.official, rangeSource: "none" },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null for an unknown rangeSource", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        official: { ...fixture.official, rangeSource: "estimated" },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
   });
 });

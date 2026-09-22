@@ -1,12 +1,16 @@
 export const LATEST_SNAPSHOT_KEY = "latest.json";
 
+export type RangeSource = "inline" | "footnote" | "none";
+
 export interface OfficialForecast {
   midpoint: number;
   low: number | null;
   high: number | null;
+  rangeSource: RangeSource;
+  announcedAt: string;
+  noChangeUpdate: { date: string } | null;
   currency: "NZD";
   unit: "NZD/kgMS";
-  announcedAt: string;
   sourceUrl: string;
   retrievedAt: string;
   status: "ok";
@@ -69,6 +73,16 @@ function parseOfficial(value: unknown): OfficialForecast | null {
   if (low !== null && low > midpoint) return null;
   if (high !== null && high < midpoint) return null;
 
+  const rangeSource = candidate.rangeSource;
+  if (rangeSource !== "inline" && rangeSource !== "footnote" && rangeSource !== "none") {
+    return null;
+  }
+  if (rangeSource === "none" && (low !== null || high !== null)) return null;
+  if (rangeSource !== "none" && (low === null || high === null)) return null;
+
+  const noChangeUpdate = parseNoChangeUpdate(candidate.noChangeUpdate);
+  if (noChangeUpdate === undefined) return null;
+
   const announcedAt = isoDateString(candidate.announcedAt);
   const retrievedAt = isoDateString(candidate.retrievedAt);
   const sourceUrl = nonEmptyString(candidate.sourceUrl);
@@ -82,13 +96,23 @@ function parseOfficial(value: unknown): OfficialForecast | null {
     midpoint,
     low,
     high,
+    rangeSource,
+    announcedAt,
+    noChangeUpdate,
     currency: "NZD",
     unit: "NZD/kgMS",
-    announcedAt,
     sourceUrl,
     retrievedAt,
     status: "ok",
   };
+}
+
+// undefined = invalid shape; null = no No Change announcement to surface.
+function parseNoChangeUpdate(value: unknown): { date: string } | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object") return undefined;
+  const date = isoDateString((value as Record<string, unknown>).date);
+  return date === null ? undefined : { date };
 }
 
 function positiveNumber(value: unknown): number | null {
