@@ -26,13 +26,13 @@
 **Description:** Configure OpenNext, the web Worker, a separate collection Worker, and local R2 bindings. Render the comparison layout from a fixture snapshot.
 
 **Acceptance criteria:**
-- [ ] The OpenNext production bundle builds successfully.
-- [ ] Both Workers start locally with the expected bindings.
-- [ ] The page renders fixture values through the same boundary planned for R2 data.
+- [x] The OpenNext production bundle builds successfully.
+- [x] Both Workers start locally with the expected bindings.
+- [x] The page renders fixture values through the same boundary planned for R2 data.
 
 **Verification:**
-- [ ] `npm run build:worker`
-- [ ] Start the local Workers preview and inspect the fixture-backed page.
+- [x] `npm run build:worker`
+- [x] Start the local Workers preview and inspect the fixture-backed page.
 
 **Dependencies:** Task 1
 
