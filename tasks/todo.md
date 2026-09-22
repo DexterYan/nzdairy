@@ -5,15 +5,15 @@
 **Description:** Scaffold the Next.js App Router application with TypeScript, npm scripts, linting, Vitest, and a minimal English page.
 
 **Acceptance criteria:**
-- [ ] The application starts locally and renders a semantic page shell.
-- [ ] Type checking, linting, tests, and the Next.js build have explicit scripts.
-- [ ] Dependency and generated-file policies are documented.
+- [x] The application starts locally and renders a semantic page shell.
+- [x] Type checking, linting, tests, and the Next.js build have explicit scripts.
+- [x] Dependency and generated-file policies are documented.
 
 **Verification:**
-- [ ] `npm run typecheck`
-- [ ] `npm run lint`
-- [ ] `npm test`
-- [ ] `npm run build`
+- [x] `npm run typecheck`
+- [x] `npm run lint`
+- [x] `npm test`
+- [x] `npm run build`
 
 **Dependencies:** None
 
