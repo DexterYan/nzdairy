@@ -160,28 +160,70 @@ async function degradedMissingFutures() {
   );
 }
 
+// Strip // and /* */ comments outside string literals so commented-out
+// settings can never satisfy the deployment gate.
+function parseJsonc(text) {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      let end = i + 1;
+      while (end < text.length && text[end] !== '"') {
+        if (text[end] === "\\") end += 1;
+        end += 1;
+      }
+      out += text.slice(i, end + 1);
+      i = end + 1;
+    } else if (ch === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i += 1;
+    } else if (ch === "/" && text[i + 1] === "*") {
+      i += 2;
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) {
+        i += 1;
+      }
+      i += 2;
+    } else {
+      out += ch;
+      i += 1;
+    }
+  }
+  return JSON.parse(out);
+}
+
 function deploymentGate() {
+  const parserProbe = parseJsonc(
+    '{"a": /* enabled */ true, "b": 2, /* c */ "workers_dev": false}',
+  );
+  check(
+    "gate: JSONC parser ignores block and inline comments",
+    parserProbe.workers_dev === false && parserProbe.b === 2,
+  );
   for (const config of ["wrangler.jsonc", "wrangler.collection.jsonc"]) {
-    // Commented-out settings must not satisfy the gate.
-    const active = readFileSync(config, "utf8").replace(/^\s*\/\/.*$/gm, "");
+    const parsed = parseJsonc(readFileSync(config, "utf8"));
     check(
       `gate: ${config} keeps workers_dev disabled`,
-      /"workers_dev"\s*:\s*false/.test(active) &&
-        !/"workers_dev"\s*:\s*true/.test(active),
+      parsed.workers_dev === false,
     );
     check(
       `gate: ${config} keeps preview_urls disabled`,
-      /"preview_urls"\s*:\s*false/.test(active) &&
-        !/"preview_urls"\s*:\s*true/.test(active),
+      parsed.preview_urls === false,
     );
   }
 }
 
 let preview = null;
+let shutdownPromise = null;
 
 // The detached preview must never outlive this script: kill first, wait
-// bounded, escalate to SIGKILL, and restore R2 only afterwards.
-async function shutdown() {
+// bounded, escalate to SIGKILL. Concurrent callers share one shutdown so a
+// second signal or a signal during teardown still waits for the kill.
+function shutdown() {
+  if (shutdownPromise === null) shutdownPromise = doShutdown();
+  return shutdownPromise;
+}
+
+async function doShutdown() {
   if (preview === null || preview.pid === undefined) return;
   const pid = preview.pid;
   preview = null;
@@ -207,7 +249,7 @@ async function shutdown() {
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
-    void shutdown().then(() => process.exit(130));
+    shutdown().then(() => process.exit(130));
   });
 }
 
