@@ -271,6 +271,6 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 
 ## Checkpoint: Design extension reviewed
 
-- [ ] Every design-extension acceptance criterion and verification step passes.
-- [ ] Rendered page matches design.md, including the §3.1 contrast values.
-- [ ] Human review of the redesigned page before merging to the release line.
+- [x] Every design-extension acceptance criterion and verification step passes.
+- [x] Rendered page matches design.md, including the §3.1 contrast values.
+- [x] Human review of the redesigned page before merging to the release line.
