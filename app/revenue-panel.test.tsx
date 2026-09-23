@@ -100,6 +100,15 @@ describe("RevenuePanel", () => {
     ).toBeDefined();
   });
 
+  it("describes a nonzero difference that still rounds to zero dollars", () => {
+    panel();
+    enterProduction("1");
+
+    expect(
+      screen.getByText("The revenue difference rounds to NZ$0."),
+    ).toBeDefined();
+  });
+
   it("shows a one-dollar difference once the raw difference reaches fifty cents", () => {
     panel({ ...okFutures, basis: "prior-settlement", price: 9, bid: null, offer: null, last: null });
     enterProduction("1");
