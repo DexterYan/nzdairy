@@ -89,13 +89,13 @@
 **Description:** Add expected-production input, official and futures revenue comparison, and +/-$0.50/kgMS sensitivity.
 
 **Acceptance criteria:**
-- [ ] Valid production produces correctly formatted gross milk-revenue values.
-- [ ] Blank or invalid input shows guidance without misleading results.
-- [ ] Assumptions remain adjacent to calculated outputs.
+- [x] Valid production produces correctly formatted gross milk-revenue values.
+- [x] Blank or invalid input shows guidance without misleading results.
+- [x] Assumptions remain adjacent to calculated outputs.
 
 **Verification:**
-- [ ] Test 150,000 kgMS at $9.25, $9.80, and +/-$0.50 sensitivity.
-- [ ] Check blank, zero, negative, non-finite, and excessive-precision input.
+- [x] Test 150,000 kgMS at $9.25, $9.80, and +/-$0.50 sensitivity.
+- [x] Check blank, zero, negative, non-finite, and excessive-precision input.
 
 **Dependencies:** Task 4
 

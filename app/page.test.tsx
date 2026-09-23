@@ -42,6 +42,14 @@ describe("MilkCompass page shell", () => {
 
     expect(screen.getByRole("banner").textContent).toContain("2026/27 season");
   });
+
+  it("offers the production input below the price comparison", () => {
+    view();
+
+    expect(
+      screen.getByLabelText("Expected full-season production, kgMS"),
+    ).toBeDefined();
+  });
 });
 
 describe("official forecast card", () => {

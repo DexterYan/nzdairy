@@ -1,4 +1,5 @@
 import type { FuturesBlock, FuturesReason, MilkSnapshot } from "../lib/snapshot";
+import RevenuePanel from "./revenue-panel";
 import styles from "./page.module.css";
 
 const nzDate = new Intl.DateTimeFormat("en-NZ", {
@@ -36,7 +37,13 @@ export default function ComparisonView({
           Compare today&apos;s reference prices and explore your revenue.
         </p>
         {snapshot ? (
-          <ComparisonCards snapshot={snapshot} />
+          <>
+            <ComparisonCards snapshot={snapshot} />
+            <RevenuePanel
+              official={snapshot.official}
+              futures={snapshot.futures}
+            />
+          </>
         ) : (
           <p className={styles.unavailable}>
             Reference prices are unavailable right now.
