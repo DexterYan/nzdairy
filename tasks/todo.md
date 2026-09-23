@@ -205,17 +205,17 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** New pure-CSS figure under the comparison cards plotting the official low–mid–high range and the futures price on one padded domain, with opposed direct labels, a two-item key, and an accessible sentence. No charting library — HTML/CSS geometry only.
 
 **Acceptance criteria:**
-- [ ] Domain follows the per-state table in design.md §4.3 (range+futures / range only / no-range two-dot / no strip), padded 2% per side with a **minimum span of $0.50** centred on the extremes, so equal prices never collapse the track; markers are never clamped.
-- [ ] Solid boundary ticks in official green (≥3:1) sit at the published low and high — or at the two plotted values in the no-range state — and their labels are those tick values; the padded domain ends are never ticked or labeled.
-- [ ] Official marker and label sit above the track, futures below — always, including coincident values; markers are ≥8px with a 2px surface ring; labels carry name + value, appending `· old quote` to the futures label when the quote is >72 h.
-- [ ] Labels use edge-aware alignment (15% rule, design.md §4.3), tested with the futures marker outside the range in both directions at 375px without viewport overflow.
-- [ ] The two-item key renders whenever both series show; official-only renders without a key; the range extent reads through the boundary ticks in grayscale (the wash is decorative, composite `#9db498`).
-- [ ] The figure carries `role="img"` with an aria-label sentence carrying the actual values; the same numbers remain in the cards' text.
+- [x] Domain follows the per-state table in design.md §4.3 (range+futures / range only / no-range two-dot / no strip), padded 2% per side with a **minimum span of $0.50** centred on the extremes, so equal prices never collapse the track; markers are never clamped.
+- [x] Solid boundary ticks in official green (≥3:1) sit at the published low and high — or at the two plotted values in the no-range state — and their labels are those tick values; the padded domain ends are never ticked or labeled.
+- [x] Official marker and label sit above the track, futures below — always, including coincident values; markers are ≥8px with a 2px surface ring; labels carry name + value, appending `· old quote` to the futures label when the quote is >72 h.
+- [x] Labels use edge-aware alignment (15% rule, design.md §4.3), tested with the futures marker outside the range in both directions at 375px without viewport overflow.
+- [x] The two-item key renders whenever both series show; official-only renders without a key; the range extent reads through the boundary ticks in grayscale (the wash is decorative, composite `#9db498`).
+- [x] The figure carries `role="img"` with an aria-label sentence carrying the actual values; the same numbers remain in the cards' text.
 
 **Verification:**
-- [ ] Unit tests for the domain helper (padding, out-of-range futures, coincident values, degenerate inputs) and rendering tests for each degenerate state.
-- [ ] `npm run typecheck && npm run lint && npm test && npm run build`
-- [ ] Visual check at 375px and desktop for label collisions and overflow.
+- [x] Unit tests for the domain helper (padding, out-of-range futures, coincident values, degenerate inputs) and rendering tests for each degenerate state.
+- [x] `npm run typecheck && npm run lint && npm test && npm run build`
+- [x] Visual check at 375px and desktop for label collisions and overflow.
 
 **Dependencies:** Task 9
 

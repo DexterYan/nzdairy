@@ -670,3 +670,28 @@ describe("footer source credits", () => {
     expect(footer.textContent).toContain("not live prices");
   });
 });
+
+describe("comparison strip wiring", () => {
+  it("plots both references under the comparison cards", () => {
+    view();
+
+    const figure = screen.getByRole("img");
+    expect(figure.getAttribute("aria-label")).toContain("Futures $9.88");
+  });
+
+  it("plots the official range alone when futures is unavailable", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: { status: "unavailable", reason: "crossed" },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("img").getAttribute("aria-label")).toContain(
+      "Official forecast midpoint",
+    );
+  });
+});

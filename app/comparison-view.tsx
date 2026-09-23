@@ -6,6 +6,7 @@ import type {
   QuoteBasis,
   SourceCheck,
 } from "../lib/snapshot";
+import ComparisonStrip from "./comparison-strip";
 import RevenuePanel from "./revenue-panel";
 import styles from "./page.module.css";
 
@@ -98,8 +99,9 @@ function ComparisonCards({ snapshot, now }: { snapshot: MilkSnapshot; now: numbe
   const hasRange = official.low !== null && official.high !== null;
 
   return (
-    <section className={styles.comparison} aria-label="Price comparison">
-      <article className={styles.card} aria-labelledby="official-heading">
+    <section aria-label="Price comparison">
+      <div className={styles.comparison}>
+        <article className={styles.card} aria-labelledby="official-heading">
         <h2 id="official-heading" className={styles.cardTitle}>
           Fonterra forecast
         </h2>
@@ -134,19 +136,25 @@ function ComparisonCards({ snapshot, now }: { snapshot: MilkSnapshot; now: numbe
         <a className={styles.sourceLink} href={official.sourceUrl}>
           View official source
         </a>
-      </article>
-      <article className={styles.card} aria-labelledby="futures-heading">
-        <h2 id="futures-heading" className={styles.cardTitle}>
-          Futures reference
-        </h2>
-        <FuturesCard
-          futures={snapshot.futures}
-          check={snapshot.checks?.futures}
-          season={snapshot.season}
-          collectedAt={snapshot.collectedAt}
-          now={now}
-        />
-      </article>
+        </article>
+        <article className={styles.card} aria-labelledby="futures-heading">
+          <h2 id="futures-heading" className={styles.cardTitle}>
+            Futures reference
+          </h2>
+          <FuturesCard
+            futures={snapshot.futures}
+            check={snapshot.checks?.futures}
+            season={snapshot.season}
+            collectedAt={snapshot.collectedAt}
+            now={now}
+          />
+        </article>
+      </div>
+      <ComparisonStrip
+        official={snapshot.official}
+        futures={snapshot.futures}
+        now={now}
+      />
     </section>
   );
 }
