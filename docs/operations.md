@@ -61,7 +61,7 @@ local collection, which always hits the live sources. `workers_dev` and
 `preview_urls` are `false` in both wrangler configs, and `scripts/e2e.mjs`
 fails if either flag is re-enabled (including in a commented-out line) before
 the rights question is settled. Deployment additionally requires a human
-review of the complete release (see the checkpoint in `tasks/todo.md`).
+review of the complete release (see the checkpoint in `tasks/first-release/todo.md`).
 
 ## Failure handling and rollback
 

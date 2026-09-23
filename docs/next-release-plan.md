@@ -222,7 +222,7 @@ migration, while preserving explicit delayed-data language.
 
 ## Delivery sequence
 
-Tasks 13–22 (with focused sub-tasks) are in [`tasks/todo.md`](../tasks/todo.md).
+Tasks 13–22 (with focused sub-tasks) are in [`tasks/next-release/todo.md`](../tasks/next-release/todo.md).
 
 ```text
 13a Field/access requirements -> 14 Contracts

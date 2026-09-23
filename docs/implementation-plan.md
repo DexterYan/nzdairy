@@ -52,7 +52,7 @@ Create a versioned snapshot containing the season, official forecast, futures re
 7. Add scheduled snapshot publication and last-known-good failure handling.
 8. Complete responsive, accessibility, degraded-data, and production-build verification.
 
-The detailed task checklist is maintained in [`tasks/todo.md`](../tasks/todo.md).
+The detailed task checklist is maintained in [`tasks/first-release/todo.md`](../tasks/first-release/todo.md).
 
 ## Acceptance Examples
 

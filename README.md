@@ -39,4 +39,5 @@ Node 22 and npm are the toolchain; `package-lock.json` is committed.
 - [Operations](docs/operations.md)
 - [Data rights](docs/data-rights.md)
 - [UI preview](docs/ui-preview.md)
-- [Implementation tasks](tasks/todo.md)
+- [First-release tasks](tasks/first-release/todo.md)
+- [Next-release tasks](tasks/next-release/todo.md)

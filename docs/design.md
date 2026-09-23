@@ -5,7 +5,7 @@ Vesper Tool's [SMP calculator](https://vespertool.com/calculators/dairy/smp/) an
 [homepage](https://vespertool.com/), extended through a seeded decision procedure
 (random seed below), then revised after an independent adversarial review (17 findings,
 2026-09-23 — all triaged into this revision). Any implementation goes through
-`tasks/todo.md` (Tasks 9–12); this document is the visual/interaction contract for
+`tasks/design-extension/todo.md` (Tasks 9–12); this document is the visual/interaction contract for
 that work.
 
 Author context: designer pass over the layout-only preview built in Task 1.
@@ -410,7 +410,7 @@ funnel/brand, or is excluded by the implementation plan's scope and dependency r
 
 ## 8. If this proceeds to implementation
 
-Tracked as Tasks 9–12 in `tasks/todo.md` (see `tasks/plan.md` for the chain):
+Tracked as Tasks 9–12 in `tasks/design-extension/todo.md` (see `tasks/design-extension/plan.md` for the chain):
 
 1. **Task 9 — tokens + card refinements:** custom properties, header band, basis
    tags, status chips, footer. Markup changes in `comparison-view.tsx`, not CSS-only.

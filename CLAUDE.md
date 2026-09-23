@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-Early implementation stage — the Next.js/TypeScript toolchain (Task 1) is complete. The repo contains the reviewed implementation plan, a layout-only UI preview, the task checklist, and the application scaffold. `docs/implementation-plan.md` is the authoritative product and architecture plan; `tasks/todo.md` is the executable task checklist (with acceptance criteria and verification steps per task); `tasks/plan.md` maps the dependency chain between tasks. Read the implementation plan before making product or architecture decisions.
+Early implementation stage — the Next.js/TypeScript toolchain (Task 1) is complete. The repo contains the reviewed implementation plan, a layout-only UI preview, the task checklist, and the application scaffold. `docs/implementation-plan.md` is the authoritative product and architecture plan. Each plan owns its own subdirectory under `tasks/` — currently `first-release/`, `design-extension/`, `next-release/` — holding that plan's `todo.md` (executable checklist with acceptance criteria and verification steps per task) and `plan.md` (dependency chain); `tasks/lessons.md` holds cross-cutting lessons. Never put two plans' tasks in the same folder or file — new work gets its own subdirectory. Read the implementation plan before making product or architecture decisions.
 
 ## What Is Being Built
 
@@ -33,7 +33,7 @@ MilkCompass: one English-language page for New Zealand Fonterra suppliers compar
 ## Working Agreements
 
 - **Simplicity & minimal impact** — touch only what the task needs. Find root causes; no temporary fixes.
-- **Plan first for non-trivial work** — 3+ steps or architectural decisions go in `tasks/todo.md`. Re-plan if things go sideways.
+- **Plan first for non-trivial work** — 3+ steps or architectural decisions go in the active plan's `todo.md` under `tasks/<plan>/`. Re-plan if things go sideways.
 - **Verify before done** — tests, logs, or behavior diff. "Looks right" isn't enough.
 - **Use subagents** for research/exploration to keep main context clean.
 - **Capture lessons** after corrections in `tasks/lessons.md`.

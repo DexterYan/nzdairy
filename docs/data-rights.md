@@ -63,7 +63,7 @@ confirm with SGX before relying on it.
 2. Record the agreement (or the confirmation email) in this file with its
    date and scope.
 3. Re-enable `workers_dev` / `preview_urls` in both wrangler configs and
-   complete the human-review checkpoint in `tasks/todo.md` — the e2e gate
+   complete the human-review checkpoint in `tasks/first-release/todo.md` — the e2e gate
    will pass once, and only once, the flags are intentionally flipped.
 
 ## Sources (checked 23 September 2026)

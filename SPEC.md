@@ -3,7 +3,7 @@
 Status: **approved, ready to implement.** Written 2026-09-23 on branch
 `design-extension`, after the seeded design pass (`docs/design.md`), an independent
 adversarial review (17 findings, folded in), and task breakdown (Tasks 9–12 in
-`tasks/todo.md`). The capability map below was approved by the user.
+`tasks/design-extension/todo.md`). The capability map below was approved by the user.
 
 `docs/implementation-plan.md` stays authoritative for product scope. `docs/design.md`
 is the visual/interaction source of truth (tokens, component specs, state matrix,
@@ -137,9 +137,9 @@ verification checklist.
 
 ## 8. Module specs
 
-Acceptance criteria and verification steps per module live in `tasks/todo.md`
+Acceptance criteria and verification steps per module live in `tasks/design-extension/todo.md`
 (Tasks 9–12, already reviewed); the sections below are the engineering summaries.
-Check off tasks in `tasks/todo.md` as modules complete.
+Check off tasks in `tasks/design-extension/todo.md` as modules complete.
 
 ### M1 — design-tokens-and-cards (Task 9)
 
