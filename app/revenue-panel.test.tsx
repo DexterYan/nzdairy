@@ -450,6 +450,33 @@ describe("scenario prices", () => {
     expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
   });
 
+  it("reloads scenarios for a new season after session-only edits", async () => {
+    const view = render(
+      <RevenuePanel
+        official={official}
+        futures={okFutures}
+        season="2026/27"
+        storage={null}
+      />,
+    );
+    await act(async () => {});
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+
+    view.rerender(
+      <RevenuePanel
+        official={official}
+        futures={okFutures}
+        season="2027/28"
+        storage={null}
+      />,
+    );
+    await act(async () => {});
+
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+  });
+
   it("flags an invalid scenario price to assistive technology", () => {
     panel();
     const input = scenarioInput("Low price, NZD/kgMS");
