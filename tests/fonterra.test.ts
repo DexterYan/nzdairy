@@ -160,6 +160,39 @@ describe("parseOfficialForecast", () => {
     });
   });
 
+  it("does not carry a price forward across an unreadable announcement", () => {
+    const result = parseOfficialForecast(
+      fixture("no-change-over-unreadable.html"),
+      NOW,
+    );
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "unreadable-latest-update",
+    });
+  });
+
+  it("treats a recognisable announcement with a missing date as unreadable", () => {
+    const result = parseOfficialForecast(fixture("undated-latest.html"), NOW);
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "unreadable-latest-update",
+    });
+  });
+
+  it("reads season labels regardless of link attribute order and child markup", () => {
+    const result = parseOfficialForecast(
+      fixture("truncated-previous-season-varied.html"),
+      NOW,
+    );
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "season-mismatch",
+    });
+  });
+
   it("matches the committed fixture snapshot the page renders from", () => {
     const result = parseOfficialForecast(fixture("page-2026-09.html"), NOW);
 

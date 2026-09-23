@@ -89,7 +89,12 @@ function parseLabelCell(cell: string): LabelCell {
   const m = cell.match(
     /(Opening Forecast|Forecast Update|Final Update)\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i,
   );
-  if (!m) return null;
+  // A known label without a readable date is an announcement we cannot place.
+  if (!m) {
+    return /^\s*(Opening Forecast|Forecast Update|Final Update)\b/i.test(cell)
+      ? "unparseable"
+      : null;
+  }
   const month = MONTHS[m[3].toLowerCase()];
   if (!month) return "unparseable";
   const day = parseInt(m[2], 10);
@@ -167,11 +172,14 @@ export function parseOfficialForecast(
   const scope = anchor >= 0 ? html.slice(anchor) : html;
 
   // Tab labels name each pane's season; the pane id preceding a table binds them.
+  // Attribute order and child markup vary, so parse the anchor body, not a fixed shape.
   const paneLabels = new Map<string, string>();
-  for (const m of scope.matchAll(
-    /<a href="#(tabbedContent-[^"]+)"[^>]*>([^<]*)<\/a>/g,
-  )) {
-    paneLabels.set(m[1], stripTags(m[2]));
+  for (const tag of scope.matchAll(/<a\b[^>]*>/g)) {
+    const href = tag[0].match(/href="#(tabbedContent-[^"]+)"/);
+    if (!href || tag.index === undefined) continue;
+    const end = scope.indexOf("</a>", tag.index);
+    if (end === -1) continue;
+    paneLabels.set(href[1], stripTags(scope.slice(tag.index + tag[0].length, end)));
   }
   const panePositions = [...scope.matchAll(/id="(tabbedContent-[^"]+)"/g)].map(
     (m) => ({ pos: m.index ?? 0, id: m[1] }),
@@ -283,20 +291,23 @@ export function parseOfficialForecast(
   }
 
   rows.sort((a, b) => b.date.localeCompare(a.date));
-  // An unreadable row with no date could be the latest announcement.
-  if (rows.some((r) => r.unparseable && r.date === "")) {
-    return { status: "unavailable", reason: "unreadable-latest-update" };
-  }
-  if (rows[0].unparseable) {
-    return { status: "unavailable", reason: "unreadable-latest-update" };
-  }
 
   const priced = rows.filter((r) => r.midpoint !== null);
+  const latestPriced = priced[0];
+  // Any unreadable announcement newer than the price we would publish breaks
+  // the carry-forward chain, including ones we cannot date at all.
+  if (
+    rows.some(
+      (r) =>
+        r.unparseable &&
+        (r.date === "" || latestPriced === undefined || r.date > latestPriced.date),
+    )
+  ) {
+    return { status: "unavailable", reason: "unreadable-latest-update" };
+  }
   if (priced.length === 0) {
     return { status: "unavailable", reason: "no-priced-row" };
   }
-
-  const latestPriced = priced[0];
   const midpoint = latestPriced.midpoint as number;
   const { low, high } = latestPriced;
   if (
