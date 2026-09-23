@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import fixture from "../fixtures/latest-snapshot.json";
+import type { ReadProvenance } from "../lib/release";
 import type { FuturesBlock, MilkSnapshot } from "../lib/snapshot";
 import ComparisonView from "./comparison-view";
 
@@ -11,8 +12,18 @@ const okFutures = snapshot.futures as Extract<FuturesBlock, { status: "ok" }>;
 // Fixed display clock: the fixture quote is 6.5h old, checks are current.
 const FIXED_NOW = Date.parse("2026-09-23T06:00:00Z");
 
-function view(withSnapshot: MilkSnapshot | null = snapshot, nowMs: number = FIXED_NOW) {
-  render(<ComparisonView snapshot={withSnapshot} nowMs={nowMs} />);
+function view(
+  withSnapshot: MilkSnapshot | null = snapshot,
+  nowMs: number = FIXED_NOW,
+  provenance?: ReadProvenance,
+) {
+  render(
+    <ComparisonView
+      snapshot={withSnapshot}
+      nowMs={nowMs}
+      provenance={provenance}
+    />,
+  );
 }
 
 describe("MilkCompass page shell", () => {
@@ -508,6 +519,40 @@ describe("footer", () => {
 
     expect(screen.getByRole("contentinfo").textContent).toContain(
       "not live prices",
+    );
+  });
+
+  it("labels a collected release with its collection date", () => {
+    view(snapshot, FIXED_NOW, "collected");
+
+    expect(screen.getByRole("contentinfo").textContent).toContain(
+      "Collected from Fonterra and NZX on 23 Sept 2026 — delayed reference data, not live prices.",
+    );
+  });
+
+  it("labels a fixture release as a development preview", () => {
+    view(snapshot, FIXED_NOW, "fixture");
+
+    expect(screen.getByRole("contentinfo").textContent).toContain(
+      "Development preview — showing a fixture snapshot, not live prices.",
+    );
+  });
+
+  it("defaults to unknown provenance for legacy data, never guessing live", () => {
+    view(snapshot, FIXED_NOW, "unknown");
+    const footer = screen.getByRole("contentinfo").textContent ?? "";
+
+    expect(footer).toContain(
+      "Reference data collected from official sources; collection date unknown — not live prices.",
+    );
+    expect(footer).not.toContain("frozen fixture");
+  });
+
+  it("keeps the unknown label when no snapshot loaded", () => {
+    view(null, FIXED_NOW, "unknown");
+
+    expect(screen.getByRole("contentinfo").textContent).toContain(
+      "collection date unknown",
     );
   });
 });

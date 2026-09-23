@@ -2,7 +2,7 @@
 // Requires `npm run build && npm run build:worker` first; seeds local R2,
 // starts the preview Worker, and exercises the main journey plus degraded
 // states over real HTTP against the target runtime.
-import { spawn, execSync } from "node:child_process";
+import { spawn, spawnSync, execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -45,6 +45,29 @@ async function waitForReady() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error("preview server did not become ready on :8787");
+}
+
+// Seeding local R2 while the preview runs makes wrangler dev reload its
+// workerd; the listener briefly resets. Wait for it to serve steadily
+// before asserting on responses.
+async function settle() {
+  let steady = 0;
+  for (let attempt = 0; attempt < 120 && steady < 3; attempt += 1) {
+    try {
+      const { status } = await get("/");
+      steady = status === 200 ? steady + 1 : 0;
+    } catch {
+      steady = 0;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  if (steady < 3) throw new Error("preview server did not settle after seeding");
+}
+
+// workerd escapes the detached process group, so a crashed run can leave an
+// orphan holding :8787. This script owns that port for its lifetime.
+function killOrphanPreview() {
+  spawnSync("pkill", ["-f", "socket-addr=entry=localhost:8787"]);
 }
 
 // Next splits CSS across chunks; assert against all of them joined.
@@ -101,6 +124,13 @@ async function journey() {
     "a11y: viewport meta for mobile widths",
     page.body.includes('name="viewport"'),
   );
+  // The seeded manifest claims provenance "collected"; the footer must say so.
+  check(
+    "journey: footer shows collected provenance with its date",
+    page.body.includes(
+      "Collected from Fonterra and NZX on 23 Sept 2026 — delayed reference data, not live prices.",
+    ),
+  );
   const css = await stylesheets(page);
   check("a11y: stylesheet served", css !== "");
   check(
@@ -116,7 +146,10 @@ async function journey() {
 async function degradedCorruptSnapshot() {
   const corrupt = join(tmpdir(), "milkcompass-e2e-corrupt.json");
   writeFileSync(corrupt, "{not json");
+  // Both the manifest and the mirror must break before the page gives up.
+  seed("current-release.json", corrupt);
   seed("latest.json", corrupt);
+  await settle();
 
   const page = await get("/");
   check(
@@ -131,6 +164,40 @@ async function degradedCorruptSnapshot() {
   check(
     "degraded: page shell survives a corrupt snapshot",
     page.body.includes("What does the milk price mean for your farm?"),
+  );
+  check(
+    "degraded: unknown provenance never claims live prices",
+    page.body.includes("collection date unknown"),
+  );
+}
+
+// A corrupt current release falls back to the manifest's previous release;
+// the mirror holds different (stale) data and must not win.
+async function degradedPreviousReleaseFallback() {
+  const manifest = JSON.parse(readFileSync("fixtures/release/current-release.json", "utf8"));
+  // The previous test corrupted the manifest; restore it for this scenario.
+  seed("current-release.json", "fixtures/release/current-release.json");
+  seed(manifest.previous.snapshotKey, "fixtures/latest-snapshot.json");
+  seed(manifest.previous.historyKey, "fixtures/release/history.json");
+  const corrupt = join(tmpdir(), "milkcompass-e2e-corrupt.json");
+  seed(manifest.current.snapshotKey, corrupt);
+
+  // The mirror disagrees with the release the manifest points at.
+  const fixture = JSON.parse(readFileSync("fixtures/latest-snapshot.json", "utf8"));
+  delete fixture.futures;
+  const staleMirror = join(tmpdir(), "milkcompass-e2e-stale-mirror.json");
+  writeFileSync(staleMirror, JSON.stringify(fixture));
+  seed("latest.json", staleMirror);
+  await settle();
+
+  const page = await get("/");
+  check(
+    "degraded: previous release serves prices when the current one is corrupt",
+    page.status === 200 && page.body.includes("$9.50"),
+  );
+  check(
+    "degraded: a stale mirror does not override the manifest",
+    page.body.includes("$9.88") && page.body.includes("Contract MKPU27"),
   );
 }
 
@@ -155,7 +222,12 @@ async function degradedMissingFutures() {
   officialOnly.official.retrievedAt = new Date().toISOString();
   const missing = join(tmpdir(), "milkcompass-e2e-no-futures.json");
   writeFileSync(missing, JSON.stringify(officialOnly));
+  // The manifest stays valid, so the degraded snapshot must sit at the key
+  // the manifest points at — not just in the legacy mirror.
+  const manifest = JSON.parse(readFileSync("fixtures/release/current-release.json", "utf8"));
+  seed(manifest.current.snapshotKey, missing);
   seed("latest.json", missing);
+  await settle();
 
   const page = await get("/");
   const futuresCard = cardSection(page, "futures-heading");
@@ -275,6 +347,7 @@ async function doShutdown() {
     try {
       process.kill(-pid, 0);
     } catch {
+      killOrphanPreview();
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -284,6 +357,7 @@ async function doShutdown() {
   } catch {
     // already gone
   }
+  killOrphanPreview();
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -292,6 +366,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   });
 }
 
+killOrphanPreview();
 seed("latest.json", "fixtures/latest-snapshot.json");
 seedReleaseObjects();
 console.log("Seeded local R2 with the fixture snapshot and release objects; starting preview…");
@@ -303,6 +378,7 @@ try {
   await waitForReady();
   await journey();
   await degradedCorruptSnapshot();
+  await degradedPreviousReleaseFallback();
   await degradedMissingFutures();
   deploymentGate();
 } finally {

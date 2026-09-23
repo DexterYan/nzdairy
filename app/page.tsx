@@ -1,21 +1,26 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { readLatestSnapshot, type MilkSnapshot, type SnapshotBucket } from "../lib/snapshot";
+import { readRelease, type ReleaseRead, type ReleaseReader } from "../lib/release";
 import ComparisonView from "./comparison-view";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  return <ComparisonView snapshot={await loadSnapshot()} />;
+  const read = await loadRelease();
+  return (
+    <ComparisonView snapshot={read.snapshot} provenance={read.provenance} />
+  );
 }
 
-async function loadSnapshot(): Promise<MilkSnapshot | null> {
-  // A broken binding or unreadable object renders the unavailable state, never a crashed page.
+// The release ladder (no manifest → legacy; bad snapshot → previous release →
+// legacy) lives in lib/release.ts; a broken binding still renders the
+// unavailable state, never a crashed page.
+async function loadRelease(): Promise<ReleaseRead> {
   try {
     const { env } = await getCloudflareContext({ async: true });
     // Structural cast keeps workers-types globals out of Next's DOM-type world.
-    const bucket = (env as unknown as { SNAPSHOTS: SnapshotBucket }).SNAPSHOTS;
-    return await readLatestSnapshot(bucket);
+    const bucket = (env as unknown as { SNAPSHOTS: ReleaseReader }).SNAPSHOTS;
+    return await readRelease(bucket);
   } catch {
-    return null;
+    return { kind: "legacy", snapshot: null, provenance: "unknown" };
   }
 }

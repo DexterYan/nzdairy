@@ -1,4 +1,5 @@
 import { freshness } from "../lib/freshness";
+import type { ReadProvenance } from "../lib/release";
 import type {
   FuturesBlock,
   FuturesReason,
@@ -37,9 +38,12 @@ const BASIS_TAGS: Record<QuoteBasis, string> = {
 export default function ComparisonView({
   snapshot,
   nowMs,
+  provenance = "unknown",
 }: {
   snapshot: MilkSnapshot | null;
   nowMs?: number;
+  // Absent provenance is the legacy path: unknown, never guessed live.
+  provenance?: ReadProvenance;
 }) {
   // Staleness is a display rule evaluated at request time, so retained data
   // keeps aging even while the collector fails.
@@ -88,7 +92,7 @@ export default function ComparisonView({
           <span className={styles.dotFutures} aria-hidden="true" />
           NZX futures
         </p>
-        <p>Development preview — data is a frozen fixture, not live prices.</p>
+        <p>{footerNotice(provenance, snapshot)}</p>
       </footer>
     </div>
   );
@@ -314,6 +318,21 @@ function FuturesCard({
       </a>
     </>
   );
+}
+
+// Provenance wording from the next-release design §6 — no variant claims
+// live prices, and legacy data never guesses how it was collected.
+function footerNotice(
+  provenance: ReadProvenance,
+  snapshot: MilkSnapshot | null,
+): string {
+  if (provenance === "collected" && snapshot !== null) {
+    return `Collected from Fonterra and NZX on ${nzDate.format(new Date(snapshot.collectedAt))} — delayed reference data, not live prices.`;
+  }
+  if (provenance === "fixture") {
+    return "Development preview — showing a fixture snapshot, not live prices.";
+  }
+  return "Reference data collected from official sources; collection date unknown — not live prices.";
 }
 
 function futuresUnavailableMessage(reason: FuturesReason, season: string): string {

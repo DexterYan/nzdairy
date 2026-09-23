@@ -56,6 +56,9 @@ export interface ReleaseStorage {
   put(key: string, value: string, condition?: PutCondition): Promise<boolean>;
 }
 
+// The web tier binds a read-only bucket; only the collector can write.
+export type ReleaseReader = Pick<ReleaseStorage, "get">;
+
 export function releaseKeys(
   season: string,
   runId: string,
@@ -132,7 +135,7 @@ export function parseReleaseManifest(value: unknown): ReleaseManifest | null {
 //   no valid manifest          -> legacy snapshot, no history
 //   valid snapshot, bad history-> keep the snapshot, history unavailable
 //   invalid snapshot           -> previous release, then legacy, no history
-export async function readRelease(storage: ReleaseStorage): Promise<ReleaseRead> {
+export async function readRelease(storage: ReleaseReader): Promise<ReleaseRead> {
   const manifestObject = await readJson(storage, CURRENT_RELEASE_KEY);
   const manifest = manifestObject === null ? null : parseReleaseManifest(manifestObject);
   if (manifest === null) {
@@ -184,7 +187,7 @@ export async function conditionalPut(
   );
 }
 
-async function readJson(storage: ReleaseStorage, key: string): Promise<unknown | null> {
+async function readJson(storage: ReleaseReader, key: string): Promise<unknown | null> {
   try {
     const object = await storage.get(key);
     if (object === null) return null;
@@ -194,13 +197,13 @@ async function readJson(storage: ReleaseStorage, key: string): Promise<unknown |
   }
 }
 
-async function readSnapshot(storage: ReleaseStorage, key: string): Promise<MilkSnapshot | null> {
+async function readSnapshot(storage: ReleaseReader, key: string): Promise<MilkSnapshot | null> {
   const value = await readJson(storage, key);
   return value === null ? null : parseSnapshot(value);
 }
 
 async function readHistoryFor(
-  storage: ReleaseStorage,
+  storage: ReleaseReader,
   key: string | null,
   season: string,
 ): Promise<SeasonHistory | null> {
@@ -209,7 +212,7 @@ async function readHistoryFor(
   return value === null ? null : parseSeasonHistory(value, season);
 }
 
-async function legacyRead(storage: ReleaseStorage): Promise<ReleaseRead> {
+async function legacyRead(storage: ReleaseReader): Promise<ReleaseRead> {
   const snapshot = await readSnapshot(storage, "latest.json");
   return { kind: "legacy", snapshot, provenance: "unknown" };
 }

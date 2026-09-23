@@ -123,12 +123,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Migrate the page to a manifest-aware reader without making valid current prices depend on history availability.
 
 **Acceptance criteria:**
-- [ ] Wire app/page.tsx to lib/release.ts: no manifest uses legacy; bad history preserves valid manifest prices; bad snapshot tries previous release then legacy without history.
-- [ ] Validate matching season/version/object relationships and bounded fallback reads; do not mix versions or fall back to prior-season prices.
-- [ ] Replace the hardcoded frozen-fixture footer with actual fixture/collected provenance and delayed-data wording; legacy provenance defaults to unknown, never guessed live.
+- [x] Wire app/page.tsx to lib/release.ts: no manifest uses legacy; bad history preserves valid manifest prices; bad snapshot tries previous release then legacy without history.
+- [x] Validate matching season/version/object relationships and bounded fallback reads; do not mix versions or fall back to prior-season prices.
+- [x] Replace the hardcoded frozen-fixture footer with actual fixture/collected provenance and delayed-data wording; legacy provenance defaults to unknown, never guessed live.
 
 **Verification:**
-- [ ] Test bootstrap, corrupt/missing manifest/snapshot/history, stale mirror and wrong-season fallback; update SSR fixtures and run the full gate.
+- [x] Test bootstrap, corrupt/missing manifest/snapshot/history, stale mirror and wrong-season fallback; update SSR fixtures and run the full gate.
 
 **Dependencies:** 15b.
 
@@ -138,7 +138,7 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 
 ## Checkpoint: Publication and reader migration
 
-- [ ] Old v1 and new release readers work through bootstrap, corruption, write conflicts, mirror failure and Auckland rollover.
+- [x] Old v1 and new release readers work through bootstrap, corruption, write conflicts, mirror failure and Auckland rollover.
 - [ ] Restricted scheduled-run evidence has started when access permits; raw-retention rules and replay limits are recorded.
 
 ## Task 16: Calculate comparable historical changes
