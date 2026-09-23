@@ -97,6 +97,10 @@ async function journey() {
     "Use 150,000 kgMS as an example",
     "Reset scenarios to Fonterra&#x27;s published values",
     "not live prices",
+    // The what-changed section renders from the seeded history; the futures
+    // suppression wording ages with the run date, so only date-free facts.
+    "What changed",
+    "Fonterra forecast $9.50 on 21 Sept 2026, revised from $9.25 on 28 Aug 2026.",
   ]) {
     check(`journey: shows ${JSON.stringify(marker)}`, page.body.includes(marker));
   }
@@ -140,6 +144,134 @@ async function journey() {
   check(
     "a11y: visible focus styles shipped",
     css.includes(":focus-visible"),
+  );
+}
+
+// The fixture pair (midpoint snapshot, last-trade history) suppresses its
+// futures summaries, so this phase seeds a fresh same-basis reference and
+// history generated at run time to exercise the comparable sentences over
+// real SSR. Dates are Auckland calendar dates anchored on local midnight.
+async function whatChangedJourney() {
+  const nowIso = new Date().toISOString();
+  const aklIso = (ms) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Pacific/Auckland",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(ms));
+  const aklLabel = (ms) =>
+    new Intl.DateTimeFormat("en-NZ", {
+      timeZone: "Pacific/Auckland",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(ms));
+  const todayIso = aklIso(Date.now());
+  const todayMs = Date.parse(`${todayIso}T00:00:00Z`);
+  // A date-only baseline stays eligible only once its whole Auckland day has
+  // ended by the weekly cutoff, so it must sit eight days back.
+  const pastMs = todayMs - 8 * 86_400_000;
+
+  const base = JSON.parse(readFileSync("fixtures/latest-snapshot.json", "utf8"));
+  const snapshot = {
+    ...base,
+    collectedAt: nowIso,
+    futures: {
+      ...base.futures,
+      basis: "last-trade",
+      price: 9.9,
+      bid: null,
+      offer: null,
+      last: 9.9,
+      priorSettlement: null,
+      stale: false,
+      quotedAt: nowIso,
+      tradedAt: todayIso,
+      retrievedAt: nowIso,
+    },
+    checks: {
+      official: { source: "official", checkedAt: nowIso, outcome: "ok", detail: null },
+      futures: { source: "futures", checkedAt: nowIso, outcome: "ok", detail: null },
+    },
+  };
+  const futEntry = (on, value) => ({
+    identity: `mkp-futures|nzx|MKPU27|last-trade|d:${on}`,
+    series: "mkp-futures",
+    provider: "nzx",
+    market: "MKPU27",
+    basis: "last-trade",
+    effective: { kind: "date", on },
+    revisions: [
+      {
+        payload: { value, low: null, high: null, currency: "NZD", unit: "NZD/kgMS" },
+        publishedAt: null,
+        firstSeenAt: nowIso,
+        parserVersion: "e2e",
+      },
+    ],
+  });
+  const history = {
+    schemaVersion: 1,
+    season: "2026/27",
+    materialisedAt: nowIso,
+    entries: [
+      {
+        identity: "official-forecast|fonterra|2026/27|announcement|d:2026-08-28",
+        series: "official-forecast",
+        provider: "fonterra",
+        market: "2026/27",
+        basis: "announcement",
+        effective: { kind: "date", on: "2026-08-28" },
+        revisions: [
+          {
+            payload: { value: 9.25, low: 8.75, high: 9.75, currency: "NZD", unit: "NZD/kgMS" },
+            publishedAt: null,
+            firstSeenAt: nowIso,
+            parserVersion: "e2e",
+          },
+        ],
+      },
+      futEntry(aklIso(pastMs), 9.7),
+      futEntry("2026-08-27", 9.6),
+      futEntry(todayIso, 9.9),
+    ],
+  };
+  const manifest = JSON.parse(readFileSync("fixtures/release/current-release.json", "utf8"));
+  const snapshotFile = join(tmpdir(), "milkcompass-e2e-what-changed-snapshot.json");
+  const historyFile = join(tmpdir(), "milkcompass-e2e-what-changed-history.json");
+  writeFileSync(snapshotFile, JSON.stringify(snapshot));
+  writeFileSync(historyFile, JSON.stringify(history));
+  seed(manifest.current.snapshotKey, snapshotFile);
+  seed(manifest.current.historyKey, historyFile);
+  seed("latest.json", snapshotFile);
+  await settle();
+
+  const page = await get("/");
+  const todayLabel = aklLabel(todayMs);
+  const pastLabel = aklLabel(pastMs);
+  const section =
+    page.body.match(/<section[^>]*what-changed-heading[\s\S]*?<\/section>/)?.[0] ??
+    "no what-changed section";
+  // Sentences carry <strong>/<span> markup, so compare as tag-free text.
+  const text = section.replace(/<[^>]+>/g, "");
+  check(
+    "what-changed: comparable weekly sentence with Auckland dates",
+    text.includes(
+      `Since last week — futures reference $9.90 on ${todayLabel}, up $0.20 from $9.70 on ${pastLabel}.`,
+    ),
+    text,
+  );
+  check(
+    "what-changed: since-announcement sentence with its own baseline",
+    text.includes(
+      `Since Fonterra&#x27;s announcement — futures reference $9.90 on ${todayLabel}, up $0.30 from $9.60 on 27 Aug 2026.`,
+    ),
+    text,
+  );
+  check(
+    "what-changed: section ships as a labelled landmark",
+    page.body.includes('id="what-changed-heading"'),
   );
 }
 
@@ -377,6 +509,7 @@ preview = spawn("npx", ["opennextjs-cloudflare", "preview"], {
 try {
   await waitForReady();
   await journey();
+  await whatChangedJourney();
   await degradedCorruptSnapshot();
   await degradedPreviousReleaseFallback();
   await degradedMissingFutures();

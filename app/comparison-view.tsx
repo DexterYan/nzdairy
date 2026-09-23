@@ -1,3 +1,14 @@
+import {
+  aucklandDateOf,
+  aucklandDayStartMs,
+  futuresChanges,
+  officialRevision,
+  type ChangeOutcome,
+  type ObservationPoint,
+  type OfficialRevision,
+} from "../lib/changes";
+import type { SeasonHistory } from "../lib/history";
+import { Fragment, type ReactNode } from "react";
 import { freshness } from "../lib/freshness";
 import type { ReadProvenance } from "../lib/release";
 import type {
@@ -8,7 +19,7 @@ import type {
   SourceCheck,
 } from "../lib/snapshot";
 import ComparisonStrip from "./comparison-strip";
-import RevenuePanel from "./revenue-panel";
+import RevenuePanel, { type Movement } from "./revenue-panel";
 import styles from "./page.module.css";
 
 const nzDate = new Intl.DateTimeFormat("en-NZ", {
@@ -35,21 +46,44 @@ const BASIS_TAGS: Record<QuoteBasis, string> = {
   "prior-settlement": "PRIOR SETTLE",
 };
 
+// Human labels for transition sentences; unknown bases keep their stored id.
+const BASIS_LABELS: Record<string, string> = {
+  "bid-offer-midpoint": "bid/offer midpoint",
+  "last-trade": "last trade",
+  "prior-settlement": "prior settlement",
+};
+
 export default function ComparisonView({
   snapshot,
   nowMs,
   provenance = "unknown",
+  history,
 }: {
   snapshot: MilkSnapshot | null;
   nowMs?: number;
   // Absent provenance is the legacy path: unknown, never guessed live.
   provenance?: ReadProvenance;
+  // Legacy reads have no history; comparisons then explain themselves.
+  history?: SeasonHistory | null;
 }) {
   // Staleness is a display rule evaluated at request time, so retained data
   // keeps aging even while the collector fails.
   // Request-time clock is sound here: force-dynamic server component.
   // eslint-disable-next-line react-hooks/purity
   const now = nowMs ?? Date.now();
+  const changes = futuresChanges({
+    history: history ?? null,
+    snapshot,
+    nowMs: now,
+  });
+  const revision = officialRevision(history ?? null);
+  const movements =
+    changes === null
+      ? undefined
+      : [
+          movementOf("Impact of the weekly move", changes.weekly),
+          movementOf("Impact of the announcement move", changes.sinceAnnouncement),
+        ].filter((movement): movement is Movement => movement !== null);
   return (
     <div className={styles.page}>
       <div className={styles.band}>
@@ -72,10 +106,17 @@ export default function ComparisonView({
         {snapshot ? (
           <>
             <ComparisonCards snapshot={snapshot} now={now} />
+            <WhatChanged
+              changes={changes}
+              revision={revision}
+              snapshot={snapshot}
+              now={now}
+            />
             <RevenuePanel
               official={snapshot.official}
               futures={snapshot.futures}
               season={snapshot.season}
+              movements={movements}
             />
           </>
         ) : (
@@ -357,4 +398,200 @@ function futuresUnavailableMessage(reason: FuturesReason, season: string): strin
     case "not-collected":
       return "The futures reference was not collected in the last check.";
   }
+}
+
+// Next-release design §2: one entry per comparison period, dated and worded;
+// suppressed periods explain themselves and never show a delta.
+function WhatChanged({
+  changes,
+  revision,
+  snapshot,
+  now,
+}: {
+  changes: ReturnType<typeof futuresChanges>;
+  revision: OfficialRevision | null;
+  snapshot: MilkSnapshot;
+  now: number;
+}) {
+  if (changes === null && revision === null) return null;
+  const entries: { key: string; plain: string; node: ReactNode }[] = [];
+  if (changes !== null) {
+    entries.push(
+      periodEntry("weekly", "Since last week", changes.weekly, snapshot, now),
+      periodEntry(
+        "announcement",
+        "Since Fonterra's announcement",
+        changes.sinceAnnouncement,
+        snapshot,
+        now,
+      ),
+    );
+  }
+  if (revision !== null) {
+    entries.push({
+      key: "revision",
+      plain: revisionSentence(revision),
+      node: (
+        <p className={styles.changeEntry}>{revisionSentence(revision)}</p>
+      ),
+    });
+  }
+  // Both periods can suppress with the same sentence (e.g. a basis change);
+  // saying it twice would read as a bug, so render each sentence once.
+  const seen = new Set<string>();
+  const unique = entries.filter((entry) => {
+    if (seen.has(entry.plain)) return false;
+    seen.add(entry.plain);
+    return true;
+  });
+  return (
+    <section
+      className={styles.whatChanged}
+      aria-labelledby="what-changed-heading"
+    >
+      <h2 id="what-changed-heading" className={styles.cardTitle}>
+        What changed
+      </h2>
+      {unique.map((entry) => (
+        <Fragment key={entry.key}>{entry.node}</Fragment>
+      ))}
+    </section>
+  );
+}
+
+function periodEntry(
+  period: "weekly" | "announcement",
+  title: string,
+  outcome: ChangeOutcome,
+  snapshot: MilkSnapshot,
+  now: number,
+): { key: string; plain: string; node: ReactNode } {
+  if (outcome.status === "comparable") {
+    const { endpoint, baseline, delta } = outcome;
+    const endPrice = `$${endpoint.value.toFixed(2)}`;
+    const basePrice = `$${baseline.value.toFixed(2)}`;
+    const endDate = displayDate(pointDate(endpoint));
+    const baseDate = displayDate(pointDate(baseline));
+    const words =
+      delta > 0
+        ? `up $${Math.abs(delta).toFixed(2)}`
+        : delta < 0
+          ? `down $${Math.abs(delta).toFixed(2)}`
+          : "unchanged";
+    const plain = `${title} — futures reference ${endPrice} on ${endDate}, ${words} from ${basePrice} on ${baseDate}.`;
+    return {
+      key: period,
+      plain,
+      node: (
+        <p className={styles.changeEntry}>
+          <strong>{title}</strong> — futures reference {endPrice} on {endDate},{" "}
+          <span
+            className={
+              delta > 0
+                ? styles.changeDeltaUp
+                : delta < 0
+                  ? styles.changeDeltaDown
+                  : undefined
+            }
+          >
+            {words}
+          </span>{" "}
+          from {basePrice} on {baseDate}.
+        </p>
+      ),
+    };
+  }
+  const sentence = suppressionSentence(period, outcome, snapshot, now);
+  return {
+    key: period,
+    plain: sentence,
+    node: <p className={styles.changeSuppressed}>{sentence}</p>,
+  };
+}
+
+function suppressionSentence(
+  period: "weekly" | "announcement",
+  outcome: Extract<ChangeOutcome, { status: "suppressed" }>,
+  snapshot: MilkSnapshot,
+  now: number,
+): string {
+  if (outcome.reason === "endpoint-not-fresh") {
+    return `The current reference cannot be treated as fresh (${notFreshCause(snapshot, now)}), so no ${period} comparison is shown.`;
+  }
+  if (outcome.reason === "basis-changed" && outcome.transition !== null) {
+    const { on, from, to } = outcome.transition;
+    return `The futures reference changed basis on ${displayDate(on)} (${basisLabel(from)} → ${basisLabel(to)}), so values either side are not directly comparable.`;
+  }
+  if (outcome.reason === "source-changed" && outcome.transition !== null) {
+    const { on } = outcome.transition;
+    return `The futures reference changed source on ${displayDate(on)}; earlier values are not directly comparable.`;
+  }
+  if (
+    outcome.observationsBegin === null &&
+    nearSeasonStart(snapshot.season, now)
+  ) {
+    return `A new season began on 1 June — changes compare within the ${snapshot.season} season only.`;
+  }
+  const withWhom =
+    period === "weekly" ? "last week" : "Fonterra's announcement";
+  const begin = outcome.observationsBegin;
+  return `Not enough collected history yet to compare with ${withWhom}${begin === null ? "" : ` — observations begin ${displayDate(begin)}`}.`;
+}
+
+// Mirrors the endpoint freshness gates: which trust problem suppressed the
+// summary, in the order the gates apply.
+function notFreshCause(snapshot: MilkSnapshot, now: number): string {
+  const futures = snapshot.futures;
+  const check = snapshot.checks?.futures;
+  if (check !== undefined && check.outcome === "retained") {
+    return "a retained value";
+  }
+  if (check !== undefined && check.outcome === "unavailable") {
+    return "a failed check";
+  }
+  const fallbackAt =
+    futures !== undefined && futures.status === "ok"
+      ? futures.retrievedAt
+      : snapshot.collectedAt;
+  const { checkStale } = freshness(null, check?.checkedAt ?? fallbackAt, now);
+  if (checkStale) return "a stale check";
+  return "an old quote";
+}
+
+function revisionSentence(revision: OfficialRevision): string {
+  return `Fonterra forecast $${revision.current.value.toFixed(2)} on ${displayDate(revision.current.on)}, revised from $${revision.previous.value.toFixed(2)} on ${displayDate(revision.previous.on)}.`;
+}
+
+const SEASON_START_WINDOW_MS = 14 * 24 * 3_600_000;
+
+// Presentation heuristic from the design: right after 1 June, "not enough
+// history" is expected, not a fault — frame it as the season boundary.
+function nearSeasonStart(season: string, now: number): boolean {
+  const year = Number(season.slice(0, 4));
+  if (!Number.isInteger(year)) return false;
+  const start = aucklandDayStartMs(`${year}-06-01`);
+  return now >= start && now < start + SEASON_START_WINDOW_MS;
+}
+
+function movementOf(label: string, outcome: ChangeOutcome): Movement | null {
+  if (outcome.status !== "comparable") return null;
+  return {
+    label,
+    delta: outcome.delta,
+    since: displayDate(pointDate(outcome.baseline)),
+  };
+}
+
+function pointDate(point: ObservationPoint): string {
+  return point.effective.kind === "date"
+    ? point.effective.on
+    : aucklandDateOf(Date.parse(point.effective.at));
+}
+
+function displayDate(isoDate: string): string {
+  return nzDate.format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+function basisLabel(basis: string): string {
+  return BASIS_LABELS[basis] ?? basis;
 }

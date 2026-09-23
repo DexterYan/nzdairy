@@ -1,6 +1,12 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import fixture from "../fixtures/latest-snapshot.json";
+import historyFixture from "../fixtures/release/history.json";
+import {
+  canonicalIdentity,
+  type HistoryEntry,
+  type SeasonHistory,
+} from "../lib/history";
 import type { ReadProvenance } from "../lib/release";
 import type { FuturesBlock, MilkSnapshot } from "../lib/snapshot";
 import ComparisonView from "./comparison-view";
@@ -9,19 +15,93 @@ afterEach(cleanup);
 
 const snapshot = fixture as unknown as MilkSnapshot;
 const okFutures = snapshot.futures as Extract<FuturesBlock, { status: "ok" }>;
+const fixtureHistory = historyFixture as unknown as SeasonHistory;
 // Fixed display clock: the fixture quote is 6.5h old, checks are current.
 const FIXED_NOW = Date.parse("2026-09-23T06:00:00Z");
+
+// A last-trade reference matching the fixture history's futures basis.
+const lastTradeSnapshot: MilkSnapshot = {
+  ...snapshot,
+  futures: {
+    ...okFutures,
+    basis: "last-trade",
+    bid: null,
+    offer: null,
+    last: 9.7,
+    price: 9.7,
+    tradedAt: "2026-09-21",
+  },
+};
+
+function futEntry(on: string, value: number): HistoryEntry {
+  return {
+    identity: canonicalIdentity({
+      series: "mkp-futures",
+      provider: "nzx",
+      market: "MKPU27",
+      basis: "last-trade",
+      effective: { kind: "date", on },
+    }),
+    series: "mkp-futures",
+    provider: "nzx",
+    market: "MKPU27",
+    basis: "last-trade",
+    effective: { kind: "date", on },
+    revisions: [
+      {
+        payload: { value, low: null, high: null, currency: "NZD", unit: "NZD/kgMS" },
+        publishedAt: null,
+        firstSeenAt: "2026-09-01T06:00:00Z",
+        parserVersion: "test",
+      },
+    ],
+  };
+}
+
+function annEntry(on: string, value: number, low: number, high: number): HistoryEntry {
+  return {
+    identity: canonicalIdentity({
+      series: "official-forecast",
+      provider: "fonterra",
+      market: "2026/27",
+      basis: "announcement",
+      effective: { kind: "date", on },
+    }),
+    series: "official-forecast",
+    provider: "fonterra",
+    market: "2026/27",
+    basis: "announcement",
+    effective: { kind: "date", on },
+    revisions: [
+      {
+        payload: { value, low, high, currency: "NZD", unit: "NZD/kgMS" },
+        publishedAt: null,
+        firstSeenAt: "2026-09-01T06:00:00Z",
+        parserVersion: "test",
+      },
+    ],
+  };
+}
+
+const historyOf = (entries: HistoryEntry[]): SeasonHistory => ({
+  schemaVersion: 1,
+  season: "2026/27",
+  materialisedAt: "2026-09-23T06:00:00Z",
+  entries,
+});
 
 function view(
   withSnapshot: MilkSnapshot | null = snapshot,
   nowMs: number = FIXED_NOW,
   provenance?: ReadProvenance,
+  history?: SeasonHistory | null,
 ) {
   render(
     <ComparisonView
       snapshot={withSnapshot}
       nowMs={nowMs}
       provenance={provenance}
+      history={history}
     />,
   );
 }
@@ -738,5 +818,306 @@ describe("comparison strip wiring", () => {
     expect(screen.getByRole("img").getAttribute("aria-label")).toContain(
       "Official forecast midpoint",
     );
+  });
+});
+
+describe("what changed", () => {
+  it("summarises comparable weekly and since-announcement moves", () => {
+    view(
+      lastTradeSnapshot,
+      FIXED_NOW,
+      undefined,
+      historyOf([
+        annEntry("2026-08-28", 9.25, 8.75, 9.75),
+        futEntry("2026-08-27", 9.5),
+        futEntry("2026-09-13", 9.6),
+        futEntry("2026-09-21", 9.7),
+      ]),
+    );
+
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent ===
+          "Since last week — futures reference $9.70 on 21 Sept 2026, up $0.10 from $9.60 on 13 Sept 2026.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent ===
+          "Since Fonterra's announcement — futures reference $9.70 on 21 Sept 2026, up $0.20 from $9.50 on 27 Aug 2026.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("offers the section as a named landmark", () => {
+    view(
+      lastTradeSnapshot,
+      FIXED_NOW,
+      undefined,
+      historyOf([futEntry("2026-09-13", 9.6), futEntry("2026-09-21", 9.7)]),
+    );
+
+    expect(screen.getByRole("region", { name: "What changed" })).toBeDefined();
+  });
+
+  it("words and colours a rising and a falling move, never colour alone", () => {
+    view(
+      lastTradeSnapshot,
+      FIXED_NOW,
+      undefined,
+      historyOf([futEntry("2026-09-13", 9.5), futEntry("2026-09-21", 9.7)]),
+    );
+    expect(screen.getByText("up $0.20").className).toContain("changeDeltaUp");
+
+    cleanup();
+    view(
+      lastTradeSnapshot,
+      FIXED_NOW,
+      undefined,
+      historyOf([futEntry("2026-09-13", 9.9), futEntry("2026-09-21", 9.7)]),
+    );
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent ===
+          "Since last week — futures reference $9.70 on 21 Sept 2026, down $0.20 from $9.90 on 13 Sept 2026.",
+      ),
+    ).toBeDefined();
+    expect(screen.getByText("down $0.20").className).toContain("changeDeltaDown");
+  });
+
+  it("words a repeated price as unchanged without colouring it", () => {
+    view(
+      lastTradeSnapshot,
+      FIXED_NOW,
+      undefined,
+      historyOf([futEntry("2026-09-13", 9.7), futEntry("2026-09-21", 9.7)]),
+    );
+
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent ===
+          "Since last week — futures reference $9.70 on 21 Sept 2026, unchanged from $9.70 on 13 Sept 2026.",
+      ),
+    ).toBeDefined();
+    expect(screen.getByText("unchanged").className).not.toContain("changeDelta");
+  });
+
+  it("explains a basis change instead of comparing across it, once", () => {
+    view(snapshot, FIXED_NOW, undefined, fixtureHistory);
+
+    expect(
+      screen.getAllByText(
+        "The futures reference changed basis on 21 Sept 2026 (last trade → bid/offer midpoint), so values either side are not directly comparable.",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("names the official revision separately from futures moves", () => {
+    view(snapshot, FIXED_NOW, undefined, fixtureHistory);
+
+    expect(
+      screen.getByText(
+        "Fonterra forecast $9.50 on 21 Sept 2026, revised from $9.25 on 28 Aug 2026.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("explains suppressed summaries with a stale check once the endpoint ages", () => {
+    view(snapshot, Date.parse("2026-09-26T00:00:00Z"), undefined, fixtureHistory);
+
+    expect(
+      screen.getByText(
+        "The current reference cannot be treated as fresh (a stale check), so no weekly comparison is shown.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        "The current reference cannot be treated as fresh (a stale check), so no announcement comparison is shown.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("derives the retained cause from the check outcome", () => {
+    view(
+      {
+        ...snapshot,
+        checks: {
+          official: {
+            source: "official",
+            checkedAt: "2026-09-23T06:00:00Z",
+            outcome: "ok",
+            detail: null,
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:00Z",
+            outcome: "retained",
+            detail: "unavailable:crossed",
+          },
+        },
+      },
+      FIXED_NOW,
+      undefined,
+      fixtureHistory,
+    );
+
+    expect(
+      screen.getByText(
+        "The current reference cannot be treated as fresh (a retained value), so no weekly comparison is shown.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("derives the old-quote cause when checks are current", () => {
+    view(
+      {
+        ...snapshot,
+        checks: {
+          official: {
+            source: "official",
+            checkedAt: "2026-09-25T22:00:00Z",
+            outcome: "ok",
+            detail: null,
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-25T22:00:00Z",
+            outcome: "ok",
+            detail: null,
+          },
+        },
+      },
+      Date.parse("2026-09-26T02:00:00Z"),
+      undefined,
+      fixtureHistory,
+    );
+
+    expect(
+      screen.getByText(
+        "The current reference cannot be treated as fresh (an old quote), so no weekly comparison is shown.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("points at the first observation when history is too short", () => {
+    view(
+      snapshot,
+      FIXED_NOW,
+      undefined,
+      historyOf([annEntry("2026-08-28", 9.25, 8.75, 9.75)]),
+    );
+
+    expect(
+      screen.getByText(
+        "Not enough collected history yet to compare with last week — observations begin 28 Aug 2026.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        "Not enough collected history yet to compare with Fonterra's announcement — observations begin 28 Aug 2026.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("drops the begin clause when no observations exist at all", () => {
+    view(snapshot, FIXED_NOW, undefined, null);
+
+    expect(
+      screen.getByText(
+        "Not enough collected history yet to compare with last week.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent ===
+          "Not enough collected history yet to compare with Fonterra's announcement.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("frames a young season instead of naming missing history", () => {
+    view(snapshot, Date.parse("2026-06-05T06:00:00Z"), undefined, historyOf([]));
+
+    expect(
+      screen.getAllByText(
+        "A new season began on 1 June — changes compare within the 2026/27 season only.",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("shows no what-changed section without a snapshot", () => {
+    view(null);
+
+    expect(screen.queryByRole("region", { name: "What changed" })).toBeNull();
+  });
+});
+
+describe("movement tiles", () => {
+  const movementHistory = historyOf([
+    annEntry("2026-08-28", 9.25, 8.75, 9.75),
+    futEntry("2026-08-27", 9.4),
+    futEntry("2026-09-13", 9.5),
+    futEntry("2026-09-21", 9.7),
+  ]);
+
+  function enterProduction(value: string) {
+    fireEvent.change(
+      screen.getByLabelText("Expected full-season production, kgMS"),
+      { target: { value } },
+    );
+  }
+
+  it("turns each comparable period into a movement tile", () => {
+    view(lastTradeSnapshot, FIXED_NOW, undefined, movementHistory);
+    enterProduction("150000");
+
+    expect(screen.getByText("Impact of the weekly move")).toBeDefined();
+    expect(screen.getByText("Impact of the announcement move")).toBeDefined();
+    // The futures-vs-official tile shares +NZ$30,000 at these prices.
+    expect(screen.getAllByText("+NZ$30,000").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("+NZ$30,000")[0].className).toContain("tileValueUp");
+    expect(
+      screen.getByText("+$0.20/kgMS since 13 Sept 2026 at your production"),
+    ).toBeDefined();
+    expect(screen.getByText("+NZ$45,000")).toBeDefined();
+    expect(
+      screen.getByText("+$0.30/kgMS since 27 Aug 2026 at your production"),
+    ).toBeDefined();
+  });
+
+  it("updates the movement tiles as production changes", () => {
+    view(lastTradeSnapshot, FIXED_NOW, undefined, movementHistory);
+    enterProduction("150000");
+    fireEvent.change(screen.getByRole("slider", { name: "Production slider" }), {
+      target: { value: "200000" },
+    });
+
+    expect(screen.getAllByText("+NZ$40,000").length).toBeGreaterThan(0);
+    expect(screen.getByText("+NZ$60,000")).toBeDefined();
+  });
+
+  it("keeps tiles absent for suppressed moves while scenarios stay editable", () => {
+    view(snapshot, FIXED_NOW, undefined, fixtureHistory);
+    enterProduction("150000");
+
+    expect(screen.queryByRole("heading", { name: "What a move means for you" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Low price, NZD/kgMS"), {
+      target: { value: "8" },
+    });
+    expect(screen.getByText("NZ$1,200,000")).toBeDefined();
+  });
+
+  it("shows NZ$0 movement tiles at zero production", () => {
+    view(lastTradeSnapshot, FIXED_NOW, undefined, movementHistory);
+    enterProduction("0");
+
+    expect(screen.getByText("Impact of the weekly move")).toBeDefined();
+    expect(screen.getByText("Impact of the announcement move")).toBeDefined();
+    expect(screen.getAllByText("NZ$0")).toHaveLength(9);
   });
 });

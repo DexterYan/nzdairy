@@ -7,7 +7,11 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const read = await loadRelease();
   return (
-    <ComparisonView snapshot={read.snapshot} provenance={read.provenance} />
+    <ComparisonView
+      snapshot={read.snapshot}
+      provenance={read.provenance}
+      history={read.kind === "release" ? read.history : null}
+    />
   );
 }
 

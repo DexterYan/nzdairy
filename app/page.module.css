@@ -370,6 +370,34 @@
   gap: 0.75rem;
 }
 
+.whatChanged {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.changeEntry {
+  margin: 0;
+}
+
+.changeDeltaUp {
+  color: var(--color-delta-up);
+  font-weight: 600;
+}
+
+.changeDeltaDown {
+  color: var(--color-delta-down);
+  font-weight: 600;
+}
+
+.changeSuppressed {
+  margin: 0;
+  color: var(--color-ink-soft);
+}
+
 .fieldRow {
   display: flex;
   flex-wrap: wrap;

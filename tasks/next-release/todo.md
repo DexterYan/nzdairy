@@ -164,12 +164,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Add dated movement summaries using the existing production state owner.
 
 **Acceptance criteria:**
-- [ ] Pass release/history inputs through ComparisonView and validated deltas into RevenuePanel without duplicating raw production state.
-- [ ] At 150,000 kgMS a $0.20/kgMS delta yields NZ$30,000; cover negative changes, invalid/blank/zero production, overflow and rounded-zero wording.
-- [ ] Unavailable/incomparable history shows guidance while current values, saved scenarios and exclusions remain intact.
+- [x] Pass release/history inputs through ComparisonView and validated deltas into RevenuePanel without duplicating raw production state.
+- [x] At 150,000 kgMS a $0.20/kgMS delta yields NZ$30,000; cover negative changes, invalid/blank/zero production, overflow and rounded-zero wording.
+- [x] Unavailable/incomparable history shows guidance while current values, saved scenarios and exclusions remain intact.
 
 **Verification:**
-- [ ] Component tests exercise typing and slider updates across both summary periods, degraded history and unchanged scenarios; run the slice gate and SSR degraded scenarios.
+- [x] Component tests exercise typing and slider updates across both summary periods, degraded history and unchanged scenarios; run the slice gate and SSR degraded scenarios.
 
 **Dependencies:** 13b, 15c and 16.
 
