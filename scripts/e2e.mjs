@@ -8,8 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const BASE = "http://localhost:8787";
-const SNAPSHOT = "milkcompass-snapshots/latest.json";
 const WRANGLER_CONFIG = "wrangler.jsonc";
+const BUCKET = "milkcompass-snapshots";
 
 let failures = 0;
 function check(name, condition, detail = "") {
@@ -18,9 +18,9 @@ function check(name, condition, detail = "") {
   if (!condition) failures += 1;
 }
 
-function seed(file) {
+function seed(key, file) {
   execSync(
-    `npx wrangler r2 object put ${SNAPSHOT} --local -c ${WRANGLER_CONFIG} --file ${file} --content-type application/json`,
+    `npx wrangler r2 object put ${BUCKET}/${key} --local -c ${WRANGLER_CONFIG} --file ${file} --content-type application/json`,
     { stdio: "pipe" },
   );
 }
@@ -116,7 +116,7 @@ async function journey() {
 async function degradedCorruptSnapshot() {
   const corrupt = join(tmpdir(), "milkcompass-e2e-corrupt.json");
   writeFileSync(corrupt, "{not json");
-  seed(corrupt);
+  seed("latest.json", corrupt);
 
   const page = await get("/");
   check(
@@ -155,7 +155,7 @@ async function degradedMissingFutures() {
   officialOnly.official.retrievedAt = new Date().toISOString();
   const missing = join(tmpdir(), "milkcompass-e2e-no-futures.json");
   writeFileSync(missing, JSON.stringify(officialOnly));
-  seed(missing);
+  seed("latest.json", missing);
 
   const page = await get("/");
   const futuresCard = cardSection(page, "futures-heading");
@@ -208,6 +208,26 @@ function parseJsonc(text) {
     }
   }
   return JSON.parse(out);
+}
+
+// The release fixtures mirror what the collector's publication writes: a
+// manifest plus its immutable objects. The snapshot object for the manifest's
+// run is byte-identical to that run's mirror, so one file seeds both.
+function seedReleaseObjects() {
+  const manifest = JSON.parse(readFileSync("fixtures/release/current-release.json", "utf8"));
+  seed("current-release.json", "fixtures/release/current-release.json");
+  seed(manifest.current.historyKey, "fixtures/release/history.json");
+  seed(manifest.current.snapshotKey, "fixtures/latest-snapshot.json");
+  const history = JSON.parse(readFileSync("fixtures/release/history.json", "utf8"));
+  check(
+    "fixtures: manifest keys match its run",
+    manifest.current.snapshotKey === `releases/${manifest.season}/${manifest.runId}/snapshot.json` &&
+      manifest.current.historyKey === `releases/${manifest.season}/${manifest.runId}/history.json`,
+  );
+  check(
+    "fixtures: history belongs to the manifest season",
+    history.season === manifest.season && history.schemaVersion === 1,
+  );
 }
 
 function deploymentGate() {
@@ -272,8 +292,9 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   });
 }
 
-seed("fixtures/latest-snapshot.json");
-console.log("Seeded local R2 with the fixture snapshot; starting preview…");
+seed("latest.json", "fixtures/latest-snapshot.json");
+seedReleaseObjects();
+console.log("Seeded local R2 with the fixture snapshot and release objects; starting preview…");
 preview = spawn("npx", ["opennextjs-cloudflare", "preview"], {
   stdio: "inherit",
   detached: true,
@@ -287,7 +308,8 @@ try {
 } finally {
   await shutdown();
   try {
-    seed("fixtures/latest-snapshot.json");
+    seed("latest.json", "fixtures/latest-snapshot.json");
+    seedReleaseObjects();
   } catch (error) {
     console.error(`Failed to restore the fixture snapshot: ${error}`);
   }

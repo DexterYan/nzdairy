@@ -24,8 +24,44 @@ curl "http://localhost:8788/__scheduled?cron=0+6+*+*+*"   # needs --test-schedul
 
 The collector emits one JSON object per log line: `collector.run.started`,
 `collector.source.checked` (per source, with the check outcome),
-`collector.archive.written`, and `collector.publish.succeeded` /
-`collector.publish.skipped`.
+`collector.archive.written`, `collector.publish.release-written`,
+`collector.publish.manifest-updated`, `collector.publish.mirror-failed`,
+`collector.archive.cleanup`, and `collector.publish.succeeded` /
+`collector.publish.skipped` / `collector.publish.failed`.
+
+## Release publication and retention
+
+Each scheduled run derives its run ID from the scheduled instant
+(`YYYYMMDD-HHMMSS`, e.g. `20260923-060000`), so a retried run rewrites the
+same keys with the same content instead of forking. Publication order:
+
+1. `releases/{season}/{runId}/snapshot.json` — the run's v1 snapshot (immutable
+   once the manifest references it),
+2. `releases/{season}/{runId}/history.json` — the season's observations, built
+   by merging today's dated announcements and any history-eligible futures
+   reference into the committed history (identical refetches are duplicates;
+   changed payloads become revisions),
+3. `current-release.json` — the manifest, written conditionally (R2 `If-Match`
+   on the version read at run start, or `If-None-Match: *` to create). On a
+   lost race the run re-reads, rebuilds from the winner's committed history,
+   and retries (bounded); a manifest newer than the run ends it as
+   `older-run` instead,
+4. `latest.json` — the legacy v1 mirror, only after the manifest commit. A
+   mirror failure is logged and retried once but never fails the run; old
+   readers lag and keep their last valid snapshot.
+
+A new season (1 June Auckland) starts an empty history and a manifest with no
+previous descriptor; prior-season objects stay untouched for their retention
+period. Log events `collector.publish.skipped` (`older-run`,
+`no-valid-official`) and `collector.publish.failed` (`manifest-conflict`)
+mark the non-publishing outcomes.
+
+**Archives** hold parsed provenance (`archive/{source}/{instant}.json`), not
+raw HTML — raw-retention rights are unconfirmed (see
+[Data rights](data-rights.md)), so raw replay is unavailable and recovery
+re-parses from the live source. Archives are deleted after 400 days (a season
+plus buffer); cleanup lists `archive/` once per run and deletes at most 100
+objects, converging over successive runs.
 
 ## Data sources and assumptions
 
@@ -77,6 +113,9 @@ review of the complete release (see the checkpoint in `tasks/first-release/todo.
   isolated, self-contained commit) and rebuild. To roll back data, re-put a
   known-good object:
   `npx wrangler r2 object put milkcompass-snapshots/latest.json --local -c wrangler.jsonc --file fixtures/latest-snapshot.json --content-type application/json`.
+  Release readers fall back to `latest.json` on a missing/invalid manifest, so
+  removing or corrupting `current-release.json` alone cannot take the page
+  down; re-putting a prior manifest restores its referenced release objects.
 
 ## Provenance
 

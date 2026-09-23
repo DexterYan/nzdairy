@@ -105,12 +105,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Write validated observations, immutable release objects and a manifest while retaining the old reader path.
 
 **Acceptance criteria:**
-- [ ] Commit immutable snapshot/history before conditional manifest update, then update latest.json as a v1 mirror; test conflicts, retry idempotency, older-run rejection and mirror failures.
-- [ ] Deduplicate/refine observations, archive only permitted evidence, implement documented expiry cleanup and record replay limits when raw retention is prohibited.
-- [ ] Test scheduled Auckland rollover with May 31 2027 (2026/27) and June 1 2027 (2027/28): only new-season observations enter the new history and old objects remain unchanged.
+- [x] Commit immutable snapshot/history before conditional manifest update, then update latest.json as a v1 mirror; test conflicts, retry idempotency, older-run rejection and mirror failures.
+- [x] Deduplicate/refine observations, archive only permitted evidence, implement documented expiry cleanup and record replay limits when raw retention is prohibited.
+- [x] Test scheduled Auckland rollover with May 31 2027 (2026/27) and June 1 2027 (2027/28): only new-season observations enter the new history and old objects remain unchanged.
 
 **Verification:**
-- [ ] Inject failures at every write and conflicting runs; update fixture seeding/SSR tests in the same slice and run the full gate. Start restricted scheduled-run observation once access/environment permit.
+- [x] Inject failures at every write and conflicting runs; update fixture seeding/SSR tests in the same slice and run the full gate. Start restricted scheduled-run observation once access/environment permit.
 
 **Dependencies:** 14 and 15a; production provider use also requires 13c.
 
