@@ -146,12 +146,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Implement weekly and since-priced-announcement rules as pure functions.
 
 **Acceptance criteria:**
-- [ ] Use Auckland calendar arithmetic, interval-aware date-only cutoffs, inclusive lookback bounds and actual displayed endpoint dates.
-- [ ] Select nearest temporal baseline before comparison; suppress basis/provider transitions including A→B→A and reject mismatched contract/unit/currency.
-- [ ] Allow verified old historical baselines/backfills, but suppress fresh summaries for failed/retained/stale current checks or old effective endpoints; no-change notices do not reset the baseline.
+- [x] Use Auckland calendar arithmetic, interval-aware date-only cutoffs, inclusive lookback bounds and actual displayed endpoint dates.
+- [x] Select nearest temporal baseline before comparison; suppress basis/provider transitions including A→B→A and reject mismatched contract/unit/currency.
+- [x] Allow verified old historical baselines/backfills, but suppress fresh summaries for failed/retained/stale current checks or old effective endpoints; no-change notices do not reset the baseline.
 
 **Verification:**
-- [ ] Test DST boundaries, date-only last trades, exact cutoffs, insufficient history, backfilled baselines, >72-hour endpoints and transitions; run the slice gate.
+- [x] Test DST boundaries, date-only last trades, exact cutoffs, insufficient history, backfilled baselines, >72-hour endpoints and transitions; run the slice gate.
 
 **Dependencies:** 14; can precede publication integration using fixtures.
 
