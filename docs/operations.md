@@ -46,17 +46,21 @@ The collector emits one JSON object per log line: `collector.run.started`,
   hours are stale. Both are display rules computed at request time, so
   retained data keeps aging while the collector fails.
 - **Fixtures** — `fixtures/latest-snapshot.json` and `tests/fixtures/` stand
-  in for live pages. Live fetching is not enabled until the data-rights gate
-  below is cleared; parsers are pinned by fixture tests so upstream markup
-  changes fail visibly instead of mis-parsing.
+  in for live pages in unit tests and for the web tier's local previews.
+  **The collector itself always fetches the live URLs on every run** —
+  triggering it locally overwrites the seeded fixture in local R2 with live
+  results. Parsers are pinned by fixture tests so upstream markup changes
+  fail visibly instead of mis-parsing.
 
 ## Data-rights gate (deployment blocker)
 
 Public deployment is blocked until NZX/SGX market-data display rights are
-documented. `workers_dev` and `preview_urls` are `false` in both wrangler
-configs, and `scripts/e2e.mjs` fails if either flag is re-enabled before the
-rights question is settled. Deployment additionally requires a human review of
-the complete release (see the checkpoint in `tasks/todo.md`).
+documented — the gate restricts **public display** of NZX market data, not
+local collection, which always hits the live sources. `workers_dev` and
+`preview_urls` are `false` in both wrangler configs, and `scripts/e2e.mjs`
+fails if either flag is re-enabled (including in a commented-out line) before
+the rights question is settled. Deployment additionally requires a human
+review of the complete release (see the checkpoint in `tasks/todo.md`).
 
 ## Failure handling and rollback
 

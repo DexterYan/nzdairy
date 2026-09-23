@@ -9,7 +9,7 @@
     "start": "next start",
     "build:worker": "opennextjs-cloudflare build",
     "preview": "opennextjs-cloudflare preview",
-    "dev:collector": "wrangler dev -c wrangler.collection.jsonc --test-scheduled",
+    "dev:collector": "wrangler dev -c wrangler.collection.jsonc --test-scheduled --port 8788",
     "seed:snapshot": "wrangler r2 object put milkcompass-snapshots/latest.json --local -c wrangler.jsonc --file fixtures/latest-snapshot.json --content-type application/json",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

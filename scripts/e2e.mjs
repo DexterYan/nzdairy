@@ -115,52 +115,105 @@ async function degradedCorruptSnapshot() {
   );
 }
 
+function cardSection(page, labelledBy) {
+  const match = page.body.match(
+    new RegExp(`<article[^>]*aria-labelledby="${labelledBy}"[\\s\\S]*?</article>`),
+  );
+  return match === null ? "" : match[0];
+}
+
 async function degradedMissingFutures() {
   const fixture = JSON.parse(
     readFileSync("fixtures/latest-snapshot.json", "utf8"),
   );
   const { futures, ...officialOnly } = fixture;
   void futures;
-  // Two days before any plausible check time: the 36-hour display rule must fire.
+  // The futures card ages via the 48-hour-old collectedAt; the official card
+  // is kept freshly retrieved so its staleness state stays distinct forever.
   officialOnly.collectedAt = new Date(
     Date.now() - 48 * 3_600_000,
   ).toISOString();
+  officialOnly.official.retrievedAt = new Date().toISOString();
   const missing = join(tmpdir(), "milkcompass-e2e-no-futures.json");
   writeFileSync(missing, JSON.stringify(officialOnly));
   seed(missing);
 
   const page = await get("/");
+  const futuresCard = cardSection(page, "futures-heading");
+  const officialCard = cardSection(page, "official-heading");
   check(
     "degraded: official forecast survives a missing futures block",
-    page.body.includes("$9.50"),
+    officialCard.includes("$9.50"),
   );
   check(
     "degraded: missing futures block renders its unavailable state",
-    page.body.includes("Futures reference is unavailable right now."),
+    futuresCard.includes("Futures reference is unavailable right now."),
   );
   check(
-    "degraded: stale collection check is warned about at request time",
-    page.body.includes("The last check is more than 36 hours old."),
+    "degraded: futures card warns about the stale collection check",
+    futuresCard.includes("The last check is more than 36 hours old."),
+  );
+  check(
+    "degraded: fresh official check carries no staleness warning",
+    officialCard.length > 0 &&
+      !officialCard.includes("The last check is more than 36 hours old."),
   );
 }
 
 function deploymentGate() {
   for (const config of ["wrangler.jsonc", "wrangler.collection.jsonc"]) {
-    const text = readFileSync(config, "utf8");
+    // Commented-out settings must not satisfy the gate.
+    const active = readFileSync(config, "utf8").replace(/^\s*\/\/.*$/gm, "");
     check(
       `gate: ${config} keeps workers_dev disabled`,
-      /"workers_dev"\s*:\s*false/.test(text),
+      /"workers_dev"\s*:\s*false/.test(active) &&
+        !/"workers_dev"\s*:\s*true/.test(active),
     );
     check(
       `gate: ${config} keeps preview_urls disabled`,
-      /"preview_urls"\s*:\s*false/.test(text),
+      /"preview_urls"\s*:\s*false/.test(active) &&
+        !/"preview_urls"\s*:\s*true/.test(active),
     );
   }
 }
 
+let preview = null;
+
+// The detached preview must never outlive this script: kill first, wait
+// bounded, escalate to SIGKILL, and restore R2 only afterwards.
+async function shutdown() {
+  if (preview === null || preview.pid === undefined) return;
+  const pid = preview.pid;
+  preview = null;
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    return;
+  }
+  for (let waited = 0; waited < 5000; waited += 200) {
+    try {
+      process.kill(-pid, 0);
+    } catch {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // already gone
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    void shutdown().then(() => process.exit(130));
+  });
+}
+
 seed("fixtures/latest-snapshot.json");
 console.log("Seeded local R2 with the fixture snapshot; starting preview…");
-const preview = spawn("npx", ["opennextjs-cloudflare", "preview"], {
+preview = spawn("npx", ["opennextjs-cloudflare", "preview"], {
   stdio: "inherit",
   detached: true,
 });
@@ -171,8 +224,12 @@ try {
   await degradedMissingFutures();
   deploymentGate();
 } finally {
-  seed("fixtures/latest-snapshot.json");
-  if (preview.pid !== undefined) process.kill(-preview.pid, "SIGTERM");
+  await shutdown();
+  try {
+    seed("fixtures/latest-snapshot.json");
+  } catch (error) {
+    console.error(`Failed to restore the fixture snapshot: ${error}`);
+  }
 }
 console.log(failures === 0 ? "\nAll e2e checks passed." : `\n${failures} e2e check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
