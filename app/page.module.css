@@ -1,0 +1,556 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.band {
+  background: var(--tint-band);
+}
+
+.bandInner {
+  max-width: 60rem;
+  margin-inline: auto;
+  padding: 1.5rem 1rem 2rem;
+  box-sizing: border-box;
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+}
+
+.brand {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bandInner h1 {
+  margin: 1.25rem 0 0;
+  font-size: clamp(1.5rem, 5vw, 2.25rem);
+  line-height: 1.2;
+}
+
+.lede {
+  margin: 0.5rem 0 0;
+  font-size: 1.0625rem;
+}
+
+.main {
+  max-width: 60rem;
+  width: 100%;
+  margin-inline: auto;
+  padding: 2rem 1rem 0;
+  box-sizing: border-box;
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+.comparison {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 45rem) {
+  .comparison {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  transition: box-shadow var(--motion-fast), border-color var(--motion-fast);
+}
+
+.card:hover,
+.card:focus-within {
+  box-shadow: var(--shadow-raise);
+  border-color: #c7bfae;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.priceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.price {
+  margin: 0;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.unit {
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-ink-soft);
+}
+
+.warning {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-warn-text);
+}
+
+.sourceLink {
+  font-size: 0.9375rem;
+}
+
+.unavailable {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  background: var(--color-card);
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-card);
+}
+
+.main > .unavailable {
+  margin: 0 0 3rem;
+}
+
+/* Basis tags and status chips: the mark vocabulary — green official, blue
+   futures, amber warnings. Dots never carry meaning alone; text is the content. */
+.tag,
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: fit-content;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  padding: 0.25rem 0.625rem;
+}
+
+.tagOfficial {
+  background: var(--tint-official);
+  color: var(--chip-text-official);
+}
+
+.tagFutures {
+  background: var(--tint-futures);
+  color: var(--chip-text-futures);
+}
+
+.chip::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.chipOkOfficial {
+  background: var(--tint-official);
+  color: var(--chip-text-official);
+}
+
+.chipOkOfficial::before {
+  background: var(--color-mark-official);
+}
+
+.chipOkFutures {
+  background: var(--tint-futures);
+  color: var(--chip-text-futures);
+}
+
+.chipOkFutures::before {
+  background: var(--color-mark-futures);
+}
+
+.chipWarn {
+  background: var(--tint-warn);
+  color: var(--chip-text-warn);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.chipWarn::before {
+  background: var(--color-warn-text);
+}
+
+.chipUnavailable {
+  background: var(--color-card);
+  border: 1px dashed var(--color-line);
+  color: var(--color-ink-soft);
+}
+
+.chipUnavailable::before {
+  background: transparent;
+  border: 1px solid var(--color-ink-soft);
+}
+
+.footer {
+  max-width: 60rem;
+  width: 100%;
+  margin-inline: auto;
+  margin-top: 3rem;
+  padding: 1rem;
+  box-sizing: border-box;
+  border-top: 1px solid var(--color-line);
+  font-size: 0.875rem;
+  display: grid;
+  gap: 0.375rem;
+}
+
+.footer p {
+  margin: 0;
+}
+
+.credits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-ink-soft);
+}
+
+.dotOfficial,
+.dotFutures {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+
+.dotOfficial {
+  background: var(--color-mark-official);
+}
+
+.dotFutures {
+  background: var(--color-mark-futures);
+}
+
+/* Comparison strip: geometry only, no charting library. Labels sit in
+   three bands (official above, ticks, futures below) so they cannot collide. */
+.strip {
+  margin: 1.5rem 0 0;
+}
+
+.stripWrap {
+  position: relative;
+  height: 7.5rem;
+  margin: 0 0.25rem;
+}
+
+.stripTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.5rem;
+  transform: translateY(-50%);
+  background: var(--color-line);
+  border-radius: var(--radius-pill);
+}
+
+/* Decorative wash (documented composite #9db498); the ticks carry extent. */
+.stripFill {
+  position: absolute;
+  top: calc(50% - 0.25rem);
+  height: 0.5rem;
+  background: #9db498;
+  border-radius: var(--radius-pill);
+}
+
+.stripTick {
+  position: absolute;
+  top: calc(50% - 0.625rem);
+  height: 1.75rem;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-mark-official);
+}
+
+.stripMarker {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid var(--color-card);
+}
+
+.stripMarkerOfficial {
+  background: var(--color-mark-official);
+}
+
+.stripMarkerFutures {
+  background: var(--color-mark-futures);
+}
+
+.stripLabel {
+  position: absolute;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  transform: translateX(-50%);
+}
+
+.stripLabelOfficial {
+  bottom: calc(50% + 1.25rem);
+}
+
+.stripTickLabel {
+  top: calc(50% + 1rem);
+  color: var(--color-ink-soft);
+  font-size: 0.8125rem;
+}
+
+.stripLabelFutures {
+  top: calc(50% + 2.25rem);
+}
+
+.edgeLeft {
+  transform: translateX(0);
+}
+
+.edgeRight {
+  transform: translateX(-100%);
+}
+
+.stripKey {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0.5rem 0.25rem 0;
+  font-size: 0.875rem;
+  color: var(--color-ink-soft);
+}
+
+.revenue {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.fieldRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.fieldLabel {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.input {
+  font: inherit;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-field);
+  max-width: 9rem;
+}
+
+.input:focus-visible,
+.exampleButton:focus-visible,
+.slider:focus-visible,
+.sourceLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.sliderRow {
+  display: grid;
+}
+
+.slider {
+  width: 100%;
+  accent-color: var(--color-focus);
+}
+
+/* Screen-reader text lives in the accessibility tree, not the box. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.exampleButton {
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-field);
+  background: #f4f1e8;
+  cursor: pointer;
+}
+
+/* Stat tiles: proportional figures (no tabular-nums — that stays on the
+   scenario rows), one column below 45rem, two above. */
+.tiles {
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 45rem) {
+  .tiles {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.tile {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-field);
+  padding: 0.875rem 1rem;
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+}
+
+.tileLabel {
+  font-size: 0.9375rem;
+  color: var(--color-ink-soft);
+}
+
+.tileValue {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tileValueUp {
+  color: var(--color-delta-up);
+}
+
+.tileValueDown {
+  color: var(--color-delta-down);
+}
+
+.tileCaption {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-ink-soft);
+}
+
+.tileGuidance {
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-field);
+  padding: 0.875rem 1rem;
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  color: var(--color-ink-soft);
+}
+
+.tileGuidance dd {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.guidance {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-warn-text);
+}
+
+.assumptions {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-ink-soft);
+  border-top: 1px solid #e4dfd3;
+  padding-top: 0.75rem;
+}
+
+.scenarioTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.scenarios {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.scenarioRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+}
+
+.scenarioRow label {
+  flex-basis: 12rem;
+  flex-grow: 1;
+}
+
+.scenarioInput {
+  font: inherit;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-field);
+  width: 5.5rem;
+}
+
+.scenarioInput:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.scenarioRevenue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.scenarioGuidance {
+  font-size: 0.875rem;
+  color: var(--color-warn-text);
+}
