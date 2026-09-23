@@ -43,3 +43,13 @@ MilkCompass: one English-language page for New Zealand Fonterra suppliers compar
 A comment earns its lines by saying what the code can't.
 
 Max 2 lines. If it needs more, it belongs in this file. Say why — the constraint, the trap, the cross-repo contract. Never restate what the next line already says (secretGenerator + envs: already say "a Secret built from a dotenv file"). One fact per comment, sitting on the line it explains. Two unrelated facts = two comments in two places, not one paragraph at the top. Drop any clause a reader could infer from the value below it, and cut hedges and connectives: "note that", "essentially", "in other words", "which means ... so ...".
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
