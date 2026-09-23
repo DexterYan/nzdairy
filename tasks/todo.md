@@ -185,9 +185,9 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** Introduce the `docs/design.md` §3 custom properties in `globals.css`, then apply them to the existing cards: tinted header band with season chip, basis-tag price lockups, status chips for collection/age states, and the source-credit footer.
 
 **Acceptance criteria:**
-- [ ] `app/globals.css` defines every token from design.md §3 with the specified values; colours in `page.module.css` reference tokens instead of hardcoded hex.
-- [ ] Both cards show the price lockup with a basis tag: `FORECAST` on the official card; `MIDPOINT`, `LAST TRADE`, or `PRIOR SETTLEMENT` on the futures card per the snapshot's selected basis.
-- [ ] Collection/age states render as chips per design.md §4.6, keeping today's sentences as chip text; "Checked …" provenance stays plain meta text; no "live" claims anywhere.
+- [ ] `app/globals.css` defines every colour, radius, shadow, and motion custom property from design.md §3 with the specified values (type ramp and spacing scale are applied directly in CSS, not as custom properties); colours in `page.module.css` reference tokens instead of hardcoded hex.
+- [ ] Both cards show the price lockup with a basis tag: `FORECAST` on the official card; `MIDPOINT`, `LAST TRADE`, or `PRIOR SETTLE` on the futures card per the snapshot's selected basis. The tag is additive — every meta line rendered today (basis sentence, contract/expiry, volumes/OI, quoted time, check provenance, source link) survives unchanged.
+- [ ] Collection/age states render as chips per design.md §4.6: independent predicates, `● Up to date` suppressed when any warning chip applies, and the retention chip text carries the failed check's date. "Checked …" provenance stays plain meta text; no "live" claims anywhere.
 - [ ] Header band, season chip, and source-credit footer render with the official-green / futures-blue mark vocabulary.
 
 **Verification:**
@@ -205,9 +205,11 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** New pure-CSS figure under the comparison cards plotting the official low–mid–high range and the futures price on one padded domain, with opposed direct labels, a two-item key, and an accessible sentence. No charting library — HTML/CSS geometry only.
 
 **Acceptance criteria:**
-- [ ] Domain is `[min(low, futures), max(high, futures)]` padded 2% per side; markers are never clamped, so a futures price outside the published range still places interior to the track.
-- [ ] Official marker and label sit above the track, futures below — always, including coincident values; markers are ≥8px with a 2px surface ring.
-- [ ] The two-item key renders whenever both series show; official-only renders without a key; neither series renders no strip at all; no published range renders a two-dot scale without the range fill.
+- [ ] Domain follows the per-state table in design.md §4.3 (range+futures / range only / no-range two-dot / no strip), padded 2% per side with a **minimum span of $0.50** centred on the extremes, so equal prices never collapse the track; markers are never clamped.
+- [ ] Solid boundary ticks in official green (≥3:1) sit at the published low and high — or at the two plotted values in the no-range state — and their labels are those tick values; the padded domain ends are never ticked or labeled.
+- [ ] Official marker and label sit above the track, futures below — always, including coincident values; markers are ≥8px with a 2px surface ring; labels carry name + value, appending `· old quote` to the futures label when the quote is >72 h.
+- [ ] Labels use edge-aware alignment (15% rule, design.md §4.3), tested with the futures marker outside the range in both directions at 375px without viewport overflow.
+- [ ] The two-item key renders whenever both series show; official-only renders without a key; the range extent reads through the boundary ticks in grayscale (the wash is decorative, composite `#9db498`).
 - [ ] The figure carries `role="img"` with an aria-label sentence carrying the actual values; the same numbers remain in the cards' text.
 
 **Verification:**
@@ -226,10 +228,10 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** Replace the results definition list with the tile grid from design.md §4.4 — sentence-case label, value, sub-caption — including the signed difference tile. Full-dollar figures are retained; the assumptions sentence is the rounding contract and stays unchanged.
 
 **Acceptance criteria:**
-- [ ] Four tiles render for valid input: official revenue, futures revenue, futures-versus-official difference, and $0.50/kgMS sensitivity, each with label and sub-caption.
+- [ ] Tile presence follows the state table in design.md §4.4: official and sensitivity tiles render for valid, finite production; the futures and difference tiles additionally require futures status ok — so futures-unavailable renders two tiles plus a guidance cell, and blank/invalid/overflow production renders guidance only, no tiles.
 - [ ] The difference tile carries sign + word + colour (never colour alone); the "rounds to NZ$0" case keeps its sentence.
-- [ ] Futures-unavailable, blank, invalid, and overflow states render guidance in place of values; no zeros anywhere.
-- [ ] Tile values use proportional figures (no `tabular-nums` on tiles); scenario rows keep `tabular-nums`; tiles collapse to one column below 45rem.
+- [ ] No zero is fabricated from missing or invalid data; genuine zeros (0 kgMS production, a difference that rounds to zero) render as themselves per design.md §5.
+- [ ] Tile values are full-dollar NZD with proportional figures (no `tabular-nums` on tiles, no compact notation); scenario rows keep `tabular-nums`; the assumptions sentence is unchanged; tiles collapse to one column below 45rem.
 
 **Verification:**
 - [ ] Extend revenue-panel tests to cover tile markup and every applicable state-matrix row from design.md §5.
@@ -252,16 +254,16 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** Vesper-style slider + text pair: a native range input under the production field that writes through to the text input, which remains the single source of truth and keeps the existing validation grammar.
 
 **Acceptance criteria:**
-- [ ] Native `<input type="range">` (20,000–500,000 kgMS, step 1,000) with an accessible label renders under the production text field.
-- [ ] Dragging writes the stepped value into the text field; typing moves the thumb to the nearest in-range position.
-- [ ] Out-of-range typed values never move the thumb past its stops; the existing guidance owns the error state.
+- [ ] Native `<input type="range">` (20,000–500,000 kgMS, step 1,000) with an accessible label renders under the production text field; its bounds are interaction bounds only — typed values outside them (including 0, decimals, and values above 500,000) stay valid and exactly as typed, with only the thumb's display parking at the nearest stop, per the state table in design.md §4.5.
+- [ ] Dragging writes the stepped value into the text field; blank or invalid text never receives a write from the parked default (thumb at 150,000 when blank, last valid position when invalid) — only deliberate slider interaction writes.
+- [ ] The production text input gains `aria-invalid` and `aria-describedby` to its guidance (closing the existing gap versus scenario inputs), and the slider carries an `aria-describedby` naming its units and approximate relationship to the text value.
 - [ ] The keyboard-only journey (tab to slider, arrow keys) still completes; the e2e journey includes a slider step.
 
 **Verification:**
-- [ ] Component tests for both write-through directions and out-of-range behaviour.
+- [ ] Component tests for both write-through directions, the no-write-on-blank/invalid rule, and out-of-range display parking.
 - [ ] Full release gate: `npm run lint && npm run typecheck && npm test && npm run build && npm run build:worker && npm run test:e2e`
 
-**Dependencies:** Task 11
+**Dependencies:** Tasks 10 and 11
 
 **Files likely touched:** `app/revenue-panel.tsx`, `app/revenue-panel.test.tsx`, `scripts/e2e.mjs`
 
