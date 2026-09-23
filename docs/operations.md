@@ -55,7 +55,8 @@ The collector emits one JSON object per log line: `collector.run.started`,
 ## Data-rights gate (deployment blocker)
 
 Public deployment is blocked until NZX/SGX market-data display rights are
-documented — the gate restricts **public display** of NZX market data, not
+documented (see [Data rights](data-rights.md) for the researched licensing
+path and current status) — the gate restricts **public display** of NZX market data, not
 local collection, which always hits the live sources. `workers_dev` and
 `preview_urls` are `false` in both wrangler configs, and `scripts/e2e.mjs`
 fails if either flag is re-enabled (including in a commented-out line) before
