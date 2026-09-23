@@ -392,9 +392,32 @@
 
 .input:focus-visible,
 .exampleButton:focus-visible,
+.slider:focus-visible,
 .sourceLink:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+.sliderRow {
+  display: grid;
+}
+
+.slider {
+  width: 100%;
+  accent-color: var(--color-focus);
+}
+
+/* Screen-reader text lives in the accessibility tree, not the box. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .exampleButton {

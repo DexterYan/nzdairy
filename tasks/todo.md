@@ -254,14 +254,14 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** Vesper-style slider + text pair: a native range input under the production field that writes through to the text input, which remains the single source of truth and keeps the existing validation grammar.
 
 **Acceptance criteria:**
-- [ ] Native `<input type="range">` (20,000–500,000 kgMS, step 1,000) with an accessible label renders under the production text field; its bounds are interaction bounds only — typed values outside them (including 0, decimals, and values above 500,000) stay valid and exactly as typed, with only the thumb's display parking at the nearest stop, per the state table in design.md §4.5.
-- [ ] Dragging writes the stepped value into the text field; blank or invalid text never receives a write from the parked default (thumb at 150,000 when blank, last valid position when invalid) — only deliberate slider interaction writes.
-- [ ] The production text input gains `aria-invalid` and `aria-describedby` to its guidance (closing the existing gap versus scenario inputs), and the slider carries an `aria-describedby` naming its units and approximate relationship to the text value.
-- [ ] The keyboard-only journey (tab to slider, arrow keys) still completes; the e2e journey includes a slider step.
+- [x] Native `<input type="range">` (20,000–500,000 kgMS, step 1,000) with an accessible label renders under the production text field; its bounds are interaction bounds only — typed values outside them (including 0, decimals, and values above 500,000) stay valid and exactly as typed, with only the thumb's display parking at the nearest stop, per the state table in design.md §4.5.
+- [x] Dragging writes the stepped value into the text field; blank or invalid text never receives a write from the parked default (thumb at 150,000 when blank, last valid position when invalid) — only deliberate slider interaction writes.
+- [x] The production text input gains `aria-invalid` and `aria-describedby` to its guidance (closing the existing gap versus scenario inputs), and the slider carries an `aria-describedby` naming its units and approximate relationship to the text value.
+- [x] The keyboard-only journey (tab to slider, arrow keys) still completes; the e2e journey includes a slider step.
 
 **Verification:**
-- [ ] Component tests for both write-through directions, the no-write-on-blank/invalid rule, and out-of-range display parking.
-- [ ] Full release gate: `npm run lint && npm run typecheck && npm test && npm run build && npm run build:worker && npm run test:e2e`
+- [x] Component tests for both write-through directions, the no-write-on-blank/invalid rule, and out-of-range display parking.
+- [x] Full release gate: `npm run lint && npm run typecheck && npm test && npm run build && npm run build:worker && npm run test:e2e`
 
 **Dependencies:** Tasks 10 and 11
 

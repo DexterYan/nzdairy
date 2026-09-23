@@ -194,6 +194,120 @@ describe("RevenuePanel", () => {
   });
 });
 
+describe("production slider", () => {
+  function slider() {
+    return screen.getByRole("slider", {
+      name: "Production slider",
+    }) as HTMLInputElement;
+  }
+
+  it("renders a native range input with interaction bounds and a parked default", () => {
+    panel();
+
+    const input = slider();
+    expect(input.type).toBe("range");
+    expect(input.min).toBe("20000");
+    expect(input.max).toBe("500000");
+    expect(input.step).toBe("1000");
+    expect(input.value).toBe("150000");
+    expect(input.disabled).toBe(false);
+  });
+
+  it("never writes the parked default into a blank text field", () => {
+    panel();
+
+    expect(
+      (screen.getByLabelText("Expected full-season production, kgMS") as HTMLInputElement)
+        .value,
+    ).toBe("");
+
+    // Interacting elsewhere must not let the parked thumb write either.
+    fireEvent.change(scenarioInput("Low price, NZD/kgMS"), {
+      target: { value: "8" },
+    });
+    expect(
+      (screen.getByLabelText("Expected full-season production, kgMS") as HTMLInputElement)
+        .value,
+    ).toBe("");
+  });
+
+  it("moves the thumb to a typed in-bounds value", () => {
+    panel();
+    enterProduction("200000");
+    expect(slider().value).toBe("200000");
+  });
+
+  it("parks an off-step typed value at the nearest stop", () => {
+    panel();
+    enterProduction("254999");
+    expect(slider().value).toBe("255000");
+    expect(
+      (screen.getByLabelText("Expected full-season production, kgMS") as HTMLInputElement)
+        .value,
+    ).toBe("254999");
+  });
+
+  it("parks the thumb at the nearest stop without touching out-of-range text", () => {
+    panel();
+    enterProduction("600000");
+
+    expect(slider().value).toBe("500000");
+    expect(screen.getAllByText("NZ$5,700,000").length).toBeGreaterThan(0);
+
+    cleanup();
+    panel();
+    enterProduction("0");
+
+    expect(slider().value).toBe("20000");
+    expect(screen.getAllByText("NZ$0").length).toBeGreaterThan(0);
+  });
+
+  it("keeps the thumb at the last valid position while text is invalid", () => {
+    panel();
+    enterProduction("200000");
+    enterProduction("abc");
+
+    expect(slider().value).toBe("200000");
+  });
+
+  it("writes the stepped value through to the text field on drag", () => {
+    panel();
+    fireEvent.change(slider(), { target: { value: "250000" } });
+
+    expect(
+      (screen.getByLabelText("Expected full-season production, kgMS") as HTMLInputElement)
+        .value,
+    ).toBe("250000");
+    expect(screen.getAllByText("NZ$2,375,000").length).toBeGreaterThan(0);
+  });
+
+  it("names its units and approximation for assistive technology", () => {
+    panel();
+
+    const describedBy = slider().getAttribute("aria-describedby");
+    expect(describedBy).toContain("production-slider-note");
+    const note = document.getElementById("production-slider-note");
+    expect(note?.textContent).toContain("kgMS");
+    expect(note?.textContent).toContain("approximate");
+  });
+
+  it("flags invalid production to assistive technology like the scenario inputs", () => {
+    panel();
+    const input = screen.getByLabelText(
+      "Expected full-season production, kgMS",
+    ) as HTMLInputElement;
+
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    enterProduction("abc");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBe("production-guidance");
+    expect(document.getElementById("production-guidance")?.textContent).toBe(
+      "Enter production as a plain number in kgMS, like 150000.",
+    );
+  });
+});
+
 describe("stat tiles", () => {
   it("renders four tiles with labels, values, and sub-captions", () => {
     panel();

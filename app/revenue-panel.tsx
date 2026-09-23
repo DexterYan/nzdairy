@@ -33,6 +33,19 @@ const SCENARIOS: { key: ScenarioKey; label: string }[] = [
   { key: "high", label: "High price, NZD/kgMS" },
 ];
 
+// Slider bounds are interaction bounds only — parseProduction still accepts
+// any non-negative plain number, and typed text is never rewritten by parking.
+const SLIDER_MIN = 20_000;
+const SLIDER_MAX = 500_000;
+const SLIDER_STEP = 1_000;
+const SLIDER_ANCHOR = 150_000;
+
+const parkToStop = (value: number) =>
+  Math.min(
+    SLIDER_MAX,
+    Math.max(SLIDER_MIN, Math.round(value / SLIDER_STEP) * SLIDER_STEP),
+  );
+
 export default function RevenuePanel({
   official,
   futures,
@@ -54,6 +67,11 @@ export default function RevenuePanel({
   const dirtyRef = useRef(false);
   const loadGenerationRef = useRef(0);
   const loadedSeasonRef = useRef<string | null>(null);
+  // Where the thumb parks while the text is blank or invalid: the last value
+  // the user actually had, or the example anchor before any valid entry.
+  const [lastValidProduction, setLastValidProduction] = useState<number | null>(
+    null,
+  );
 
   // Load saved edits after mount so hydrated markup matches the server render.
   // A microtask keeps the refresh out of the commit (react-hooks/set-state-in-effect).
@@ -71,6 +89,21 @@ export default function RevenuePanel({
 
   const parsed = parseProduction(raw);
   const production = parsed.kind === "valid" ? parsed.value : null;
+
+  // raw changes only through user events, so the last valid production is
+  // recorded at the write sites — no render-time or effect-time state sync.
+  const updateProduction = (next: string) => {
+    setRaw(next);
+    const parsedNext = parseProduction(next);
+    if (parsedNext.kind === "valid") setLastValidProduction(parsedNext.value);
+  };
+
+  const thumbValue =
+    production !== null
+      ? parkToStop(production)
+      : lastValidProduction === null
+        ? SLIDER_ANCHOR
+        : parkToStop(lastValidProduction);
 
   const officialRevenue =
     production === null ? null : grossRevenue(production, official.midpoint);
@@ -112,19 +145,43 @@ export default function RevenuePanel({
           type="text"
           inputMode="decimal"
           autoComplete="off"
+          aria-invalid={parsed.kind === "invalid" || undefined}
+          aria-describedby={
+            parsed.kind === "invalid" ? "production-guidance" : undefined
+          }
           value={raw}
-          onChange={(event) => setRaw(event.target.value)}
+          onChange={(event) => updateProduction(event.target.value)}
         />
         <button
           type="button"
           className={styles.exampleButton}
-          onClick={() => setRaw("150000")}
+          onClick={() => updateProduction("150000")}
         >
           Use 150,000 kgMS as an example
         </button>
       </div>
+      <div className={styles.sliderRow}>
+        <input
+          className={styles.slider}
+          type="range"
+          min={SLIDER_MIN}
+          max={SLIDER_MAX}
+          step={SLIDER_STEP}
+          value={thumbValue}
+          aria-label="Production slider"
+          aria-describedby="production-slider-note"
+          onChange={(event) => updateProduction(event.target.value)}
+        />
+        <p id="production-slider-note" className={styles.visuallyHidden}>
+          Moves in 1,000 kgMS steps. Its position is approximate outside
+          20,000 to 500,000 kgMS; the text field holds the exact value.
+        </p>
+      </div>
       {production === null ? (
-        <p className={styles.guidance}>
+        <p
+          className={styles.guidance}
+          id={parsed.kind === "invalid" ? "production-guidance" : undefined}
+        >
           {parsed.kind === "invalid" ? GUIDANCE[parsed.reason] : GUIDANCE.blank}
         </p>
       ) : overflow ? (

@@ -78,6 +78,25 @@ async function journey() {
     check(`journey: shows ${JSON.stringify(marker)}`, page.body.includes(marker));
   }
 
+  // The slider is a convenience layer over the text field (design.md §4.5):
+  // native range input, interaction-only bounds, and its own a11y wiring.
+  const slider = page.body.match(/<input[^>]*type="range"[^>]*>/);
+  check(
+    "journey: production slider ships with interaction bounds and a11y wiring",
+    slider !== null &&
+      /min="20000"/.test(slider[0]) &&
+      /max="500000"/.test(slider[0]) &&
+      /step="1000"/.test(slider[0]) &&
+      /aria-label="Production slider"/.test(slider[0]) &&
+      /aria-describedby="production-slider-note"/.test(slider[0]),
+    slider === null ? "no range input in SSR output" : "",
+  );
+  check(
+    "journey: slider note names units and approximation",
+    page.body.includes('id="production-slider-note"') &&
+      page.body.includes("approximate"),
+  );
+
   check(
     "a11y: viewport meta for mobile widths",
     page.body.includes('name="viewport"'),
