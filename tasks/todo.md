@@ -245,9 +245,9 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 
 ## Checkpoint: Comparison surface redesigned
 
-- [ ] Full gate passes: typecheck, lint, tests, Next.js build.
-- [ ] Cards, strip, and tiles match design.md; verify against the seeded spec, not memory.
-- [ ] Keyboard-only and reduced-motion paths still work; 375px layout holds.
+- [x] Full gate passes: typecheck, lint, tests, Next.js build.
+- [x] Cards, strip, and tiles match design.md; verify against the seeded spec, not memory.
+- [x] Keyboard-only and reduced-motion paths still work; 375px layout holds.
 
 ## Task 12: Add the production slider
 
