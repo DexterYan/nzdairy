@@ -87,12 +87,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Expose current-season priced rows already present in the Fonterra table.
 
 **Acceptance criteria:**
-- [ ] Validate each historical row, range and footnote; retain published and first-seen dates and show unreadable rows as gaps.
-- [ ] Preserve current latest-forecast fail-closed behaviour; no-change notices remain events and do not reset the priced-announcement baseline.
-- [ ] Accept explicitly labelled new-season opening announcements before June 1 without importing the prior season.
+- [x] Validate each historical row, range and footnote; retain published and first-seen dates and show unreadable rows as gaps.
+- [x] Preserve current latest-forecast fail-closed behaviour; no-change notices remain events and do not reset the priced-announcement baseline.
+- [x] Accept explicitly labelled new-season opening announcements before June 1 without importing the prior season.
 
 **Verification:**
-- [ ] Fixture tests cover multiple rows, incorrect ranges, unreadable earlier/latest rows, no-change notices and pre-June openings; run the slice gate.
+- [x] Fixture tests cover multiple rows, incorrect ranges, unreadable earlier/latest rows, no-change notices and pre-June openings; run the slice gate.
 
 **Dependencies:** 14.
 
