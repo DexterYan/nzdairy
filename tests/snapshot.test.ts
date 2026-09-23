@@ -135,6 +135,14 @@ describe("readLatestSnapshot", () => {
     expect(snapshot?.futures).toEqual({ status: "unavailable", reason: "crossed" });
   });
 
+  it("round-trips a not-collected futures block from a run with no prior data", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { status: "unavailable", reason: "not-collected" } }),
+    );
+
+    expect(snapshot?.futures).toEqual({ status: "unavailable", reason: "not-collected" });
+  });
+
   it("returns null when the futures price is not a positive number", async () => {
     const snapshot = await readLatestSnapshot(
       bucketWith({ ...fixture, futures: { ...fixture.futures, price: 0 } }),

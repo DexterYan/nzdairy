@@ -186,5 +186,7 @@ function futuresUnavailableMessage(reason: FuturesReason, season: string): strin
       return "The futures quote's timestamp could not be verified.";
     case "no-basis":
       return `No usable price is quoted for the ${season} season futures contract.`;
+    case "not-collected":
+      return "The futures reference was not collected in the last check.";
   }
 }

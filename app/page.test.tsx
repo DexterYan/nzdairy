@@ -229,6 +229,23 @@ describe("futures reference card", () => {
     ).toBeDefined();
   });
 
+  it("exposes a futures check that never collected any data", () => {
+    render(
+      <ComparisonView
+        snapshot={{
+          ...snapshot,
+          futures: { status: "unavailable", reason: "not-collected" },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "The futures reference was not collected in the last check.",
+      ),
+    ).toBeDefined();
+  });
+
   it("shows a plain unavailable state when no futures block was collected", () => {
     const { futures, ...officialOnly } = snapshot;
     void futures;

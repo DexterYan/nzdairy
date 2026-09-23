@@ -133,13 +133,13 @@
 **Description:** Enable daily collection, timestamped archival, partial-failure handling, and publication of the latest combined snapshot.
 
 **Acceptance criteria:**
-- [ ] The scheduled Worker runs daily at `06:00 UTC` and archives each successful source result.
-- [ ] Partial failure retains prior valid data with its original timestamp and exposes the failed check.
-- [ ] Fetches have bounded timeouts, one transient retry, and structured operational logs.
+- [x] The scheduled Worker runs daily at `06:00 UTC` and archives each successful source result.
+- [x] Partial failure retains prior valid data with its original timestamp and exposes the failed check.
+- [x] Fetches have bounded timeouts, one transient retry, and structured operational logs.
 
 **Verification:**
-- [ ] Simulate successful, timeout, invalid-source, partial-failure, and repeated scheduled runs.
-- [ ] Inspect R2 archive and latest-snapshot objects locally.
+- [x] Simulate successful, timeout, invalid-source, partial-failure, and repeated scheduled runs.
+- [x] Inspect R2 archive and latest-snapshot objects locally.
 
 **Dependencies:** Task 4
 

@@ -16,7 +16,8 @@ export type FuturesReason =
   | "crossed"
   | "future-quote"
   | "unverifiable"
-  | "no-basis";
+  | "no-basis"
+  | "not-collected";
 
 export type FuturesValues = {
   contractCode: string;
@@ -124,7 +125,7 @@ function parseFuturesBlock(
     const validReasons: readonly string[] = [
       "no-next-data", "no-mkp-curve", "missing-contract", "wrong-season",
       "expired", "wrong-currency", "crossed", "future-quote",
-      "unverifiable", "no-basis",
+      "unverifiable", "no-basis", "not-collected",
     ];
     return typeof reason === "string" && validReasons.includes(reason)
       ? { status: "unavailable", reason: reason as FuturesReason }
