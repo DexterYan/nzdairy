@@ -70,13 +70,13 @@
 **Description:** Adapt MKP extraction, match the exact current-season contract, select a defensible reference value, and display quote-quality indicators.
 
 **Acceptance criteria:**
-- [ ] Only the matching live NZD contract can populate the reference.
-- [ ] The chosen basis, bid, offer, available volumes, open interest, and timestamp provenance are visible.
-- [ ] Crossed, missing, wrong-season, expired, old, future, and unverifiable quotes have deterministic states.
+- [x] Only the matching live NZD contract can populate the reference.
+- [x] The chosen basis, bid, offer, available volumes, open interest, and timestamp provenance are visible.
+- [x] Crossed, missing, wrong-season, expired, old, future, and unverifiable quotes have deterministic states.
 
 **Verification:**
-- [ ] Run fixtures for midpoint, last trade, settlement, missing quote, crossed market, and invalid timestamps.
-- [ ] Inspect normal and warning states in the local preview.
+- [x] Run fixtures for midpoint, last trade, settlement, missing quote, crossed market, and invalid timestamps.
+- [x] Inspect normal and warning states in the local preview.
 
 **Dependencies:** Task 3
 

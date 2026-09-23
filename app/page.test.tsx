@@ -1,12 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import fixture from "../fixtures/latest-snapshot.json";
-import type { MilkSnapshot } from "../lib/snapshot";
+import type { FuturesBlock, MilkSnapshot } from "../lib/snapshot";
 import ComparisonView from "./comparison-view";
 
 afterEach(cleanup);
 
 const snapshot = fixture as unknown as MilkSnapshot;
+const okFutures = snapshot.futures as Extract<FuturesBlock, { status: "ok" }>;
 
 function view(withSnapshot: MilkSnapshot | null = snapshot) {
   render(<ComparisonView snapshot={withSnapshot} />);
@@ -100,11 +101,92 @@ describe("official forecast card", () => {
 });
 
 describe("futures reference card", () => {
-  it("states that the futures reference arrives in a later release", () => {
+  it("shows the selected reference price with its unit", () => {
     view();
 
     expect(
-      screen.getByText("Futures reference arrives in a later release."),
+      screen.getByText((_, element) => element?.textContent === "$9.88 /kgMS"),
+    ).toBeDefined();
+  });
+
+  it("names the basis as the midpoint of the quoted bid and offer", () => {
+    view();
+
+    expect(
+      screen.getByText("Midpoint of bid $9.75 and offer $10.00"),
+    ).toBeDefined();
+  });
+
+  it("identifies the contract and its expiry", () => {
+    view();
+
+    expect(
+      screen.getByText("Contract MKPU27 · expires 30 Sept 2027"),
+    ).toBeDefined();
+  });
+
+  it("shows the available volumes and open interest", () => {
+    view();
+
+    expect(
+      screen.getByText(
+        "Bid size 3 · Offer size 58 · Traded volume 0 · Open interest 11,351",
+      ),
+    ).toBeDefined();
+  });
+
+  it("shows when the quote was last updated in New Zealand time", () => {
+    view();
+
+    expect(
+      screen.getByText("Quoted 23 Sept 2026, 11:30 am (NZ time)"),
+    ).toBeDefined();
+  });
+
+  it("warns when the quote is older than 72 hours", () => {
+    render(
+      <ComparisonView
+        snapshot={{
+          ...snapshot,
+          futures: { ...okFutures, stale: true },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("Quote is more than 72 hours old."),
+    ).toBeDefined();
+  });
+
+  it("links to the NZX quotes page", () => {
+    view();
+
+    const link = screen.getByRole("link", { name: "View NZX quotes" });
+    expect(link.getAttribute("href")).toBe(fixture.futures.sourceUrl);
+  });
+
+  it("explains deterministic unavailability reasons", () => {
+    render(
+      <ComparisonView
+        snapshot={{
+          ...snapshot,
+          futures: { status: "unavailable", reason: "crossed" },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("The futures market is crossed right now (bid above offer)."),
+    ).toBeDefined();
+  });
+
+  it("shows a plain unavailable state when no futures block was collected", () => {
+    const { futures, ...officialOnly } = snapshot;
+    void futures;
+    render(<ComparisonView snapshot={officialOnly} />);
+
+    expect(
+      screen.getByText("Futures reference is unavailable right now."),
     ).toBeDefined();
   });
 });

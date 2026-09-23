@@ -2,6 +2,47 @@ export const LATEST_SNAPSHOT_KEY = "latest.json";
 
 export type RangeSource = "inline" | "footnote" | "none";
 
+export type QuoteBasis = "bid-offer-midpoint" | "last-trade" | "prior-settlement";
+
+export type FuturesReason =
+  | "no-next-data"
+  | "no-mkp-curve"
+  | "missing-contract"
+  | "wrong-season"
+  | "expired"
+  | "wrong-currency"
+  | "crossed"
+  | "future-quote"
+  | "unverifiable"
+  | "no-basis";
+
+export type FuturesValues = {
+  contractCode: string;
+  season: string;
+  expiry: string;
+  basis: QuoteBasis;
+  price: number;
+  bid: number | null;
+  offer: number | null;
+  last: number | null;
+  priorSettlement: number | null;
+  tradedVolume: number | null;
+  bidVolume: number | null;
+  offerVolume: number | null;
+  openInterest: number | null;
+  stale: boolean;
+  currency: "NZD";
+  unit: "NZD/kgMS";
+  quotedAt: string | null;
+  tradedAt: string | null;
+  retrievedAt: string;
+  sourceUrl: string;
+};
+
+export type FuturesBlock =
+  | ({ status: "ok" } & FuturesValues)
+  | { status: "unavailable"; reason: FuturesReason };
+
 export interface OfficialForecast {
   midpoint: number;
   low: number | null;
@@ -21,6 +62,7 @@ export interface MilkSnapshot {
   season: string;
   collectedAt: string;
   official: OfficialForecast;
+  futures?: FuturesBlock;
 }
 
 export interface SnapshotObject {
@@ -57,7 +99,102 @@ function parseSnapshot(value: unknown): MilkSnapshot | null {
   const official = parseOfficial(candidate.official);
   if (season === null || collectedAt === null || official === null) return null;
 
-  return { schemaVersion: 1, season, collectedAt, official };
+  let futures: FuturesBlock | undefined;
+  if (candidate.futures !== undefined) {
+    const parsed = parseFuturesBlock(candidate.futures, season);
+    if (parsed === null) return null;
+    futures = parsed;
+  }
+
+  return { schemaVersion: 1, season, collectedAt, official, futures };
+}
+
+function parseFuturesBlock(value: unknown, season: string): FuturesBlock | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+
+  if (candidate.status === "unavailable") {
+    const reason = candidate.reason;
+    const validReasons: readonly string[] = [
+      "no-next-data", "no-mkp-curve", "missing-contract", "wrong-season",
+      "expired", "wrong-currency", "crossed", "future-quote",
+      "unverifiable", "no-basis",
+    ];
+    return typeof reason === "string" && validReasons.includes(reason)
+      ? { status: "unavailable", reason: reason as FuturesReason }
+      : null;
+  }
+  if (candidate.status !== "ok") return null;
+
+  const contractCode = nonEmptyString(candidate.contractCode);
+  if (contractCode === null || !/^MKP[A-Z]\d{2}$/.test(contractCode)) return null;
+  if (candidate.season !== season) return null;
+
+  const expiry = isoDateString(candidate.expiry);
+  const retrievedAt = isoDateString(candidate.retrievedAt);
+  const sourceUrl = nonEmptyString(candidate.sourceUrl);
+  if (expiry === null || retrievedAt === null || sourceUrl === null) return null;
+
+  const price = positiveNumber(candidate.price);
+  const bid = optionalPositiveNumber(candidate.bid);
+  const offer = optionalPositiveNumber(candidate.offer);
+  const last = optionalPositiveNumber(candidate.last);
+  const priorSettlement = optionalPositiveNumber(candidate.priorSettlement);
+  if (price === null || bid === undefined || offer === undefined) return null;
+  if (last === undefined || priorSettlement === undefined) return null;
+
+  const basis = candidate.basis;
+  if (basis !== "bid-offer-midpoint" && basis !== "last-trade" && basis !== "prior-settlement") {
+    return null;
+  }
+  // The published basis must agree with the fields that justify it.
+  if (basis === "bid-offer-midpoint") {
+    if (bid === null || offer === null || bid > offer) return null;
+    if (Math.abs(price * 2 - (bid + offer)) > 1e-9) return null;
+  }
+  if (basis === "last-trade" && (last === null || candidate.tradedAt === null)) return null;
+  if (basis === "prior-settlement" && priorSettlement === null) return null;
+
+  const quotedAt = optionalIsoDateString(candidate.quotedAt);
+  const tradedAt = optionalIsoDateString(candidate.tradedAt);
+  if (quotedAt === undefined || tradedAt === undefined) return null;
+
+  const tradedVolume = nonNegativeInt(candidate.tradedVolume);
+  const bidVolume = nonNegativeInt(candidate.bidVolume);
+  const offerVolume = nonNegativeInt(candidate.offerVolume);
+  const openInterest = nonNegativeInt(candidate.openInterest);
+  if (
+    tradedVolume === undefined || bidVolume === undefined ||
+    offerVolume === undefined || openInterest === undefined
+  ) {
+    return null;
+  }
+  if (typeof candidate.stale !== "boolean") return null;
+  if (candidate.currency !== "NZD" || candidate.unit !== "NZD/kgMS") return null;
+
+  return {
+    status: "ok",
+    contractCode,
+    season,
+    expiry,
+    basis,
+    price,
+    bid,
+    offer,
+    last,
+    priorSettlement,
+    tradedVolume,
+    bidVolume,
+    offerVolume,
+    openInterest,
+    stale: candidate.stale,
+    currency: "NZD",
+    unit: "NZD/kgMS",
+    quotedAt,
+    tradedAt,
+    retrievedAt,
+    sourceUrl,
+  };
 }
 
 function parseOfficial(value: unknown): OfficialForecast | null {
@@ -129,6 +266,20 @@ function optionalPositiveNumber(value: unknown): number | null | undefined {
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+// undefined = invalid shape; null = legitimately absent (nullable field).
+function optionalIsoDateString(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return isoDateString(value);
+}
+
+function nonNegativeInt(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    return undefined;
+  }
+  return value;
 }
 
 function isoDateString(value: unknown): string | null {

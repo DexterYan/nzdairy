@@ -91,6 +91,12 @@
   color: #4c6357;
 }
 
+.warning {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #8a5a00;
+}
+
 .sourceLink {
   font-size: 0.9375rem;
 }

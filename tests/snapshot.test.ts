@@ -126,4 +126,62 @@ describe("readLatestSnapshot", () => {
 
     expect(snapshot).toBeNull();
   });
+
+  it("round-trips a futures block that is unavailable for a stated reason", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { status: "unavailable", reason: "crossed" } }),
+    );
+
+    expect(snapshot?.futures).toEqual({ status: "unavailable", reason: "crossed" });
+  });
+
+  it("returns null when the futures price is not a positive number", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { ...fixture.futures, price: 0 } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when the futures price disagrees with its stated midpoint basis", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { ...fixture.futures, price: 9.5 } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when a last-trade basis lacks its trade date", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "last-trade",
+          bid: null,
+          offer: null,
+          last: 9.9,
+          price: 9.9,
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when the futures block names a different season", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { ...fixture.futures, season: "2025/26" } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null for an unknown futures unavailability reason", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { status: "unavailable", reason: "meh" } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
 });
