@@ -82,13 +82,41 @@ describe("RevenuePanel", () => {
     ).toBeDefined();
   });
 
-  it("reports a matching futures reference without an invented difference", () => {
+  it("describes a sub-dollar revenue difference without claiming the prices match", () => {
     panel({ ...okFutures, basis: "prior-settlement", price: 9.5, bid: null, offer: null, last: null });
     enterProduction("150000");
 
     expect(
-      screen.getByText("The futures reference matches the official forecast."),
+      screen.getByText("The revenue difference rounds to NZ$0."),
     ).toBeDefined();
+  });
+
+  it("describes the rounded difference at zero production with unequal prices", () => {
+    panel();
+    enterProduction("0");
+
+    expect(
+      screen.getByText("The revenue difference rounds to NZ$0."),
+    ).toBeDefined();
+  });
+
+  it("shows a one-dollar difference once the raw difference reaches fifty cents", () => {
+    panel({ ...okFutures, basis: "prior-settlement", price: 9, bid: null, offer: null, last: null });
+    enterProduction("1");
+
+    expect(
+      screen.getByText("NZ$1 below the official forecast"),
+    ).toBeDefined();
+  });
+
+  it("guides when finite production overflows the revenue calculation", () => {
+    panel();
+    enterProduction("9".repeat(308));
+
+    expect(
+      screen.getByText("This production is too large to calculate."),
+    ).toBeDefined();
+    expect(screen.queryByText(/NZ\$/)).toBeNull();
   });
 
   it("shows zero revenue for zero production rather than guidance", () => {

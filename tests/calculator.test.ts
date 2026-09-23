@@ -74,6 +74,10 @@ describe("grossRevenue", () => {
   it("produces zero revenue for zero production", () => {
     expect(grossRevenue(0, 9.5)).toBe(0);
   });
+
+  it("can overflow to a non-finite value, so callers must guard before rendering", () => {
+    expect(Number.isFinite(grossRevenue(1e308, 9.25))).toBe(false);
+  });
 });
 
 describe("priceSensitivity", () => {

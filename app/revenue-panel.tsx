@@ -34,6 +34,10 @@ export default function RevenuePanel({
     production === null || futuresQuote === null
       ? null
       : grossRevenue(production, futuresQuote.price);
+  // Valid input can still overflow the multiplication; never render it.
+  const overflow =
+    (officialRevenue !== null && !Number.isFinite(officialRevenue)) ||
+    (futuresRevenue !== null && !Number.isFinite(futuresRevenue));
 
   return (
     <section className={styles.revenue} aria-labelledby="revenue-heading">
@@ -64,6 +68,10 @@ export default function RevenuePanel({
       {production === null ? (
         <p className={styles.guidance}>
           {parsed.kind === "invalid" ? GUIDANCE[parsed.reason] : GUIDANCE.blank}
+        </p>
+      ) : overflow ? (
+        <p className={styles.guidance}>
+          This production is too large to calculate.
         </p>
       ) : (
         <dl className={styles.results}>
@@ -105,8 +113,9 @@ export default function RevenuePanel({
 
 function differenceLine(futuresRevenue: number, officialRevenue: number): string {
   const difference = futuresRevenue - officialRevenue;
+  // Below half a dollar the rounded figures show no difference at all.
   if (Math.abs(difference) < 0.5) {
-    return "The futures reference matches the official forecast.";
+    return "The revenue difference rounds to NZ$0.";
   }
   const direction = difference > 0 ? "above" : "below";
   return `${formatRevenue(Math.abs(difference))} ${direction} the official forecast`;
