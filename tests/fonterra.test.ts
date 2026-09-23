@@ -115,6 +115,51 @@ describe("parseOfficialForecast", () => {
     });
   });
 
+  it("attributes seasons by the page's tab labels, not row dates alone", () => {
+    const result = parseOfficialForecast(
+      fixture("truncated-previous-season.html"),
+      NOW,
+    );
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "season-mismatch",
+    });
+  });
+
+  it("refuses to fall back to an older forecast when the latest price is unreadable", () => {
+    const result = parseOfficialForecast(fixture("unreadable-latest.html"), NOW);
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "unreadable-latest-update",
+    });
+  });
+
+  it("refuses announcement dates that are not real calendar dates", () => {
+    const result = parseOfficialForecast(
+      fixture("invalid-date-latest.html"),
+      NOW,
+    );
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "unreadable-latest-update",
+    });
+  });
+
+  it("rejects price cells with trailing numeric garbage", () => {
+    const result = parseOfficialForecast(
+      fixture("trailing-garbage-latest.html"),
+      NOW,
+    );
+
+    expect(result).toEqual({
+      status: "unavailable",
+      reason: "unreadable-latest-update",
+    });
+  });
+
   it("matches the committed fixture snapshot the page renders from", () => {
     const result = parseOfficialForecast(fixture("page-2026-09.html"), NOW);
 

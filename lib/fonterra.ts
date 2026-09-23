@@ -6,7 +6,7 @@ import type { RangeSource } from "./snapshot";
 export const FONTERA_SOURCE_URL =
   "https://www.fonterra.com/nz/en/investors/financial-reports-and-farmgate-milk-price.html";
 
-export interface OfficialForecastValues {
+export type OfficialForecastValues = {
   season: string;
   midpoint: number;
   low: number | null;
@@ -15,7 +15,7 @@ export interface OfficialForecastValues {
   announcedAt: string;
   noChangeUpdate: { date: string } | null;
   sourceUrl: string;
-}
+};
 
 export type OfficialForecastResult =
   | ({ status: "ok" } & OfficialForecastValues)
@@ -25,7 +25,8 @@ export type OfficialForecastResult =
         | "no-forecast-tables"
         | "season-mismatch"
         | "no-priced-row"
-        | "invalid-range";
+        | "invalid-range"
+        | "unreadable-latest-update";
     };
 
 const MONTHS: Record<string, number> = {
@@ -55,32 +56,58 @@ interface ParsedRow {
   high: number | null;
   rangeSource: RangeSource;
   noChange: boolean;
+  // Present when the row is recognisably an announcement but its date or price
+  // failed strict parsing; such a row must never be silently skipped.
+  unparseable: boolean;
 }
+
+interface PriceCell {
+  midpoint: number | null;
+  low: number | null;
+  high: number | null;
+  footnoteMarker: boolean;
+}
+
+type PriceCellResult = PriceCell | "unparseable";
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function parseLabelCell(cell: string): { label: string; date: string } | null {
+type LabelCell = { label: string; date: string } | "unparseable" | null;
+
+function validCalendarDate(year: number, month: number, day: number): boolean {
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return (
+    dt.getUTCFullYear() === year &&
+    dt.getUTCMonth() === month - 1 &&
+    dt.getUTCDate() === day
+  );
+}
+
+function parseLabelCell(cell: string): LabelCell {
   const m = cell.match(
     /(Opening Forecast|Forecast Update|Final Update)\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i,
   );
   if (!m) return null;
   const month = MONTHS[m[3].toLowerCase()];
-  if (!month) return null;
-  const date = `${m[4]}-${String(month).padStart(2, "0")}-${String(parseInt(m[2], 10)).padStart(2, "0")}`;
+  if (!month) return "unparseable";
+  const day = parseInt(m[2], 10);
+  const year = parseInt(m[4], 10);
+  if (!validCalendarDate(year, month, day)) return "unparseable";
+  const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   return { label: m[1].replace(/update/i, "Update"), date };
 }
 
-function parsePriceCell(cell: string): {
-  midpoint: number | null;
-  low: number | null;
-  high: number | null;
-  footnoteMarker: boolean;
-} {
+function parsePriceCell(cell: string): PriceCellResult {
   const footnoteMarker = /\*\s*$/.test(cell);
   const m = cell.match(PRICE_RE);
-  if (!m) return { midpoint: null, low: null, high: null, footnoteMarker };
+  if (!m || m.index === undefined) return "unparseable";
+  const remainder = (cell.slice(0, m.index) + cell.slice(m.index + m[0].length))
+    .replace(/[\s*]/g, "");
+  // Leftover digits, currency marks, or range dashes mean a malformed price.
+  if (/[\d$]|[-–]/.test(remainder)) return "unparseable";
+
   const first = parseFloat(m[1]);
   if (m[2] !== undefined) {
     return {
@@ -112,6 +139,13 @@ function seasonFromOpening(dateIso: string): string {
   return `${startYear}/${String((startYear + 1) % 100).padStart(2, "0")}`;
 }
 
+// "Current Season 2026/2027" | "2025/2026" → season id; null for "Archives".
+function parseSeasonLabel(text: string): string | null {
+  const m = text.match(/(\d{4})\s*\/\s*(\d{4})/);
+  if (!m) return null;
+  return `${m[1]}/${String(parseInt(m[2], 10) % 100).padStart(2, "0")}`;
+}
+
 export function currentSeason(now: Date): string {
   const parts = new Intl.DateTimeFormat("en-NZ", {
     timeZone: "Pacific/Auckland",
@@ -132,24 +166,49 @@ export function parseOfficialForecast(
   const anchor = html.indexOf('id="farmgate-milk-price"');
   const scope = anchor >= 0 ? html.slice(anchor) : html;
 
+  // Tab labels name each pane's season; the pane id preceding a table binds them.
+  const paneLabels = new Map<string, string>();
+  for (const m of scope.matchAll(
+    /<a href="#(tabbedContent-[^"]+)"[^>]*>([^<]*)<\/a>/g,
+  )) {
+    paneLabels.set(m[1], stripTags(m[2]));
+  }
+  const panePositions = [...scope.matchAll(/id="(tabbedContent-[^"]+)"/g)].map(
+    (m) => ({ pos: m.index ?? 0, id: m[1] }),
+  );
+
   const tableMatches = [...scope.matchAll(/<table[\s\S]*?<\/table>/g)];
   const seasons = new Map<string, ParsedRow[]>();
 
   for (let i = 0; i < tableMatches.length; i++) {
-    const table = tableMatches[i][0];
+    const table = tableMatches[i];
     const zoneEnd = tableMatches[i + 1]?.index ?? scope.length;
     const footnote = parseFootnoteRange(
-      scope.slice(tableMatches[i].index + table.length, zoneEnd),
+      scope.slice((table.index ?? 0) + table[0].length, zoneEnd),
     );
 
     const rows: ParsedRow[] = [];
-    for (const tr of table.match(/<tr[\s\S]*?<\/tr>/g) ?? []) {
+    for (const tr of table[0].match(/<tr[\s\S]*?<\/tr>/g) ?? []) {
       const cells = [...tr.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map(
         (m) => stripTags(m[1]),
       );
       if (cells.length < 2) continue;
       const label = parseLabelCell(cells[0]);
-      if (!label) continue;
+      if (label === null) continue;
+
+      if (label === "unparseable") {
+        rows.push({
+          label: "",
+          date: "",
+          midpoint: null,
+          low: null,
+          high: null,
+          rangeSource: "none",
+          noChange: false,
+          unparseable: true,
+        });
+        continue;
+      }
 
       if (/^\s*no change\b/i.test(cells[1])) {
         rows.push({
@@ -160,12 +219,25 @@ export function parseOfficialForecast(
           high: null,
           rangeSource: "none",
           noChange: true,
+          unparseable: false,
         });
         continue;
       }
 
       const price = parsePriceCell(cells[1]);
-      if (price.midpoint === null) continue;
+      if (price === "unparseable") {
+        rows.push({
+          label: label.label,
+          date: label.date,
+          midpoint: null,
+          low: null,
+          high: null,
+          rangeSource: "none",
+          noChange: false,
+          unparseable: true,
+        });
+        continue;
+      }
 
       let { low, high } = price;
       let rangeSource: RangeSource = "none";
@@ -185,12 +257,18 @@ export function parseOfficialForecast(
         high,
         rangeSource,
         noChange: false,
+        unparseable: false,
       });
     }
     if (rows.length === 0) continue;
 
+    const labelSeason = parseSeasonLabel(
+      paneLabels.get(
+        panePositions.filter((p) => p.pos < (table.index ?? 0)).at(-1)?.id ?? "",
+      ) ?? "",
+    );
     const earliest = rows.reduce((a, b) => (a.date <= b.date ? a : b));
-    const season = seasonFromOpening(earliest.date);
+    const season = labelSeason ?? seasonFromOpening(earliest.date);
     if (!seasons.has(season)) seasons.set(season, rows);
   }
 
@@ -205,6 +283,14 @@ export function parseOfficialForecast(
   }
 
   rows.sort((a, b) => b.date.localeCompare(a.date));
+  // An unreadable row with no date could be the latest announcement.
+  if (rows.some((r) => r.unparseable && r.date === "")) {
+    return { status: "unavailable", reason: "unreadable-latest-update" };
+  }
+  if (rows[0].unparseable) {
+    return { status: "unavailable", reason: "unreadable-latest-update" };
+  }
+
   const priced = rows.filter((r) => r.midpoint !== null);
   if (priced.length === 0) {
     return { status: "unavailable", reason: "no-priced-row" };

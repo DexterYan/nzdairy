@@ -132,6 +132,15 @@ function nonEmptyString(value: unknown): string | null {
 }
 
 function isoDateString(value: unknown): string | null {
-  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) return null;
-  return value;
+  if (typeof value !== "string") return null;
+  // Date.parse normalises impossible dates like 2026-09-31; check the calendar.
+  if (!/^\d{4}-\d{2}-\d{2}(T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(value)) {
+    return null;
+  }
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) {
+    return null;
+  }
+  return Number.isNaN(Date.parse(value)) ? null : value;
 }

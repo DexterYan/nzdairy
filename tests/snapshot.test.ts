@@ -104,4 +104,26 @@ describe("readLatestSnapshot", () => {
 
     expect(snapshot).toBeNull();
   });
+
+  it("returns null for an impossible calendar date in announcedAt", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        official: { ...fixture.official, announcedAt: "2026-09-31" },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null for an impossible calendar date in noChangeUpdate", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        official: { ...fixture.official, noChangeUpdate: { date: "2026-02-30" } },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
 });
