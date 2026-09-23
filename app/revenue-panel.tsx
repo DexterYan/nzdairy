@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   formatRevenue,
   grossRevenue,
@@ -49,11 +49,22 @@ export default function RevenuePanel({
   const [scenarios, setScenarios] = useState<ScenarioState>(() =>
     scenariosFromOfficial(official),
   );
+  // Edits made this session win over any reload, even when the save failed;
+  // a superseded deferred load must never apply.
+  const dirtyRef = useRef(false);
+  const loadGenerationRef = useRef(0);
+  const loadedSeasonRef = useRef<string | null>(null);
 
   // Load saved edits after mount so hydrated markup matches the server render.
   // A microtask keeps the refresh out of the commit (react-hooks/set-state-in-effect).
   useEffect(() => {
+    const generation = ++loadGenerationRef.current;
+    if (loadedSeasonRef.current !== season) {
+      loadedSeasonRef.current = season;
+      dirtyRef.current = false;
+    }
     queueMicrotask(() => {
+      if (generation !== loadGenerationRef.current || dirtyRef.current) return;
       setScenarios(loadScenarios(resolvedStorage, season, official));
     });
   }, [resolvedStorage, season, official]);
@@ -74,6 +85,7 @@ export default function RevenuePanel({
     (futuresRevenue !== null && !Number.isFinite(futuresRevenue));
 
   const updateScenario = (key: ScenarioKey, value: string) => {
+    dirtyRef.current = true;
     const next = { ...scenarios, [key]: value };
     setScenarios(next);
     saveScenarios(resolvedStorage, season, next);
@@ -81,6 +93,7 @@ export default function RevenuePanel({
 
   const resetScenarios = () => {
     clearScenarios(resolvedStorage, season);
+    dirtyRef.current = false;
     setScenarios(scenariosFromOfficial(official));
   };
 
@@ -166,11 +179,22 @@ export default function RevenuePanel({
                 type="text"
                 inputMode="decimal"
                 autoComplete="off"
+                aria-invalid={parsedPrice.kind === "invalid" || undefined}
+                aria-describedby={
+                  parsedPrice.kind === "invalid"
+                    ? `scenario-${key}-guidance`
+                    : undefined
+                }
                 value={scenarios[key]}
                 onChange={(event) => updateScenario(key, event.target.value)}
               />
               {parsedPrice.kind === "invalid" ? (
-                <span className={styles.scenarioGuidance}>{PRICE_GUIDANCE}</span>
+                <span
+                  className={styles.scenarioGuidance}
+                  id={`scenario-${key}-guidance`}
+                >
+                  {PRICE_GUIDANCE}
+                </span>
               ) : (
                 <span className={styles.scenarioRevenue}>
                   {revenue !== null && Number.isFinite(revenue)

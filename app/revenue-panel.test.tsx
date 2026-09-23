@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fixture from "../fixtures/latest-snapshot.json";
+import { saveScenarios } from "../lib/scenarios";
 import type { FuturesBlock, OfficialForecast } from "../lib/snapshot";
 import RevenuePanel from "./revenue-panel";
 
@@ -351,5 +352,125 @@ describe("scenario prices", () => {
     expect(reset.disabled).toBe(false);
     expect(production.type).toBe("text");
     expect(scenarioInput("Low price, NZD/kgMS").type).toBe("text");
+  });
+
+  it("keeps session-only edits when storage is unavailable and source data updates", async () => {
+    const view = render(
+      <RevenuePanel
+        official={official}
+        futures={okFutures}
+        season="2026/27"
+        storage={null}
+      />,
+    );
+    await act(async () => {});
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+
+    view.rerender(
+      <RevenuePanel
+        official={{ ...official, midpoint: 9.6 }}
+        futures={okFutures}
+        season="2026/27"
+        storage={null}
+      />,
+    );
+    await act(async () => {});
+
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9");
+  });
+
+  it("keeps session-only edits when storage throws and source data updates", async () => {
+    const blocked: Storage = {
+      length: 0,
+      clear: () => {},
+      key: () => null,
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    const view = render(
+      <RevenuePanel
+        official={official}
+        futures={okFutures}
+        season="2026/27"
+        storage={blocked}
+      />,
+    );
+    await act(async () => {});
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+
+    view.rerender(
+      <RevenuePanel
+        official={{ ...official, midpoint: 9.6 }}
+        futures={okFutures}
+        season="2026/27"
+        storage={blocked}
+      />,
+    );
+    await act(async () => {});
+
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9");
+  });
+
+  it("loads the new season's scenarios when the season changes on the same mount", async () => {
+    saveScenarios(window.localStorage, "2026/27", {
+      low: "8",
+      midpoint: "9",
+      high: "11",
+    });
+    const view = render(
+      <RevenuePanel
+        official={official}
+        futures={okFutures}
+        season="2026/27"
+      />,
+    );
+    await act(async () => {});
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9");
+
+    view.rerender(
+      <RevenuePanel
+        official={official}
+        futures={okFutures}
+        season="2027/28"
+      />,
+    );
+    await act(async () => {});
+
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+  });
+
+  it("flags an invalid scenario price to assistive technology", () => {
+    panel();
+    const input = scenarioInput("Low price, NZD/kgMS");
+    fireEvent.change(input, { target: { value: "8.5.1" } });
+
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBe("scenario-low-guidance");
+    expect(document.getElementById(describedBy as string)?.textContent).toBe(
+      "Use a plain number with at most three decimal places.",
+    );
+  });
+
+  it("hides a scenario revenue that would overflow instead of showing it", () => {
+    panel();
+    enterProduction("9".repeat(307));
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "999999" },
+    });
+
+    expect(screen.queryByText(/Infinity|NaN/)).toBeNull();
+    expect(screen.getAllByText(/NZ\$/).length).toBeGreaterThan(0);
   });
 });
