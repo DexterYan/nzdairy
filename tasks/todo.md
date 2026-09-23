@@ -185,14 +185,14 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** Introduce the `docs/design.md` §3 custom properties in `globals.css`, then apply them to the existing cards: tinted header band with season chip, basis-tag price lockups, status chips for collection/age states, and the source-credit footer.
 
 **Acceptance criteria:**
-- [ ] `app/globals.css` defines every colour, radius, shadow, and motion custom property from design.md §3 with the specified values (type ramp and spacing scale are applied directly in CSS, not as custom properties); colours in `page.module.css` reference tokens instead of hardcoded hex.
-- [ ] Both cards show the price lockup with a basis tag: `FORECAST` on the official card; `MIDPOINT`, `LAST TRADE`, or `PRIOR SETTLE` on the futures card per the snapshot's selected basis. The tag is additive — every meta line rendered today (basis sentence, contract/expiry, volumes/OI, quoted time, check provenance, source link) survives unchanged.
-- [ ] Collection/age states render as chips per design.md §4.6: independent predicates, `● Up to date` suppressed when any warning chip applies, and the retention chip text carries the failed check's date. "Checked …" provenance stays plain meta text; no "live" claims anywhere.
-- [ ] Header band, season chip, and source-credit footer render with the official-green / futures-blue mark vocabulary.
+- [x] `app/globals.css` defines every colour, radius, shadow, and motion custom property from design.md §3 with the specified values (type ramp and spacing scale are applied directly in CSS, not as custom properties); colours in `page.module.css` reference tokens instead of hardcoded hex.
+- [x] Both cards show the price lockup with a basis tag: `FORECAST` on the official card; `MIDPOINT`, `LAST TRADE`, or `PRIOR SETTLE` on the futures card per the snapshot's selected basis. The tag is additive — every meta line rendered today (basis sentence, contract/expiry, volumes/OI, quoted time, check provenance, source link) survives unchanged.
+- [x] Collection/age states render as chips per design.md §4.6: independent predicates, `● Up to date` suppressed when any warning chip applies, and the retention chip text carries the failed check's date. "Checked …" provenance stays plain meta text; no "live" claims anywhere.
+- [x] Header band, season chip, and source-credit footer render with the official-green / futures-blue mark vocabulary.
 
 **Verification:**
-- [ ] Update page-level test assertions for the new markup; `npm run typecheck && npm run lint && npm test && npm run build`
-- [ ] Inspect the dev server at 375px and desktop widths: band, chips, tags, footer, and focus outlines.
+- [x] Update page-level test assertions for the new markup; `npm run typecheck && npm run lint && npm test && npm run build`
+- [x] Inspect the dev server at 375px and desktop widths: band, chips, tags, footer, and focus outlines.
 
 **Dependencies:** Task 8
 

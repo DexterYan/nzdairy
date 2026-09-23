@@ -511,3 +511,162 @@ describe("footer", () => {
     );
   });
 });
+
+describe("basis tags", () => {
+  it("tags the official card as a forecast", () => {
+    view();
+
+    expect(screen.getByText("FORECAST")).toBeDefined();
+  });
+
+  it("tags the futures card with its selected basis", () => {
+    view();
+
+    expect(screen.getByText("MIDPOINT")).toBeDefined();
+  });
+
+  it("re-tags the futures card for a last-trade basis", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: {
+            ...okFutures,
+            basis: "last-trade",
+            bid: null,
+            offer: null,
+            last: 9.9,
+            price: 9.9,
+            tradedAt: "2026-09-22",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("LAST TRADE")).toBeDefined();
+  });
+
+  it("re-tags the futures card for a prior-settlement basis", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: {
+            ...okFutures,
+            basis: "prior-settlement",
+            bid: null,
+            offer: null,
+            last: null,
+            price: 9.85,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("PRIOR SETTLE")).toBeDefined();
+  });
+});
+
+describe("status chips", () => {
+  it("marks both cards up to date when value and checks are fresh", () => {
+    view();
+
+    expect(screen.getAllByText("Up to date")).toHaveLength(2);
+  });
+
+  it("suppresses the up-to-date chip on a card with an old quote", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: { ...okFutures, stale: false, quotedAt: "2026-09-19T00:00:00Z" },
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("Up to date")).toHaveLength(1);
+  });
+
+  it("suppresses every up-to-date chip while checks are stale", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-21T00:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-21T00:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Up to date")).toBeNull();
+  });
+
+  it("suppresses the up-to-date chip on a card showing a retained value", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "retained",
+              detail: "unavailable:crossed",
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("Up to date")).toHaveLength(1);
+  });
+
+  it("chips an unavailable futures card without claiming freshness", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: { status: "unavailable", reason: "crossed" },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Unavailable")).toBeDefined();
+    expect(screen.getAllByText("Up to date")).toHaveLength(1);
+  });
+});
+
+describe("footer source credits", () => {
+  it("credits both sources beside the sample-data notice", () => {
+    view();
+
+    const footer = screen.getByRole("contentinfo");
+    expect(footer.textContent).toContain("Fonterra forecast");
+    expect(footer.textContent).toContain("NZX futures");
+    expect(footer.textContent).toContain("not live prices");
+  });
+});

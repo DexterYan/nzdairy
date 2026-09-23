@@ -3,6 +3,7 @@ import type {
   FuturesBlock,
   FuturesReason,
   MilkSnapshot,
+  QuoteBasis,
   SourceCheck,
 } from "../lib/snapshot";
 import RevenuePanel from "./revenue-panel";
@@ -26,6 +27,12 @@ const nzDateTime = new Intl.DateTimeFormat("en-NZ", {
 
 const nzInt = new Intl.NumberFormat("en-NZ");
 
+const BASIS_TAGS: Record<QuoteBasis, string> = {
+  "bid-offer-midpoint": "MIDPOINT",
+  "last-trade": "LAST TRADE",
+  "prior-settlement": "PRIOR SETTLE",
+};
+
 export default function ComparisonView({
   snapshot,
   nowMs,
@@ -39,16 +46,24 @@ export default function ComparisonView({
   // eslint-disable-next-line react-hooks/purity
   const now = nowMs ?? Date.now();
   return (
-    <div className={styles.shell}>
-      <header className={styles.banner}>
-        <p className={styles.brand}>MilkCompass</p>
-        {snapshot && <p className={styles.season}>{snapshot.season} season</p>}
-      </header>
+    <div className={styles.page}>
+      <div className={styles.band}>
+        <div className={styles.bandInner}>
+          <header className={styles.banner}>
+            <p className={styles.brand}>MilkCompass</p>
+            {snapshot && (
+              <p className={`${styles.chip} ${styles.chipOkOfficial}`}>
+                {snapshot.season} season
+              </p>
+            )}
+          </header>
+          <h1>What does the milk price mean for your farm?</h1>
+          <p className={styles.lede}>
+            Compare today&apos;s reference prices and explore your revenue.
+          </p>
+        </div>
+      </div>
       <main className={styles.main}>
-        <h1>What does the milk price mean for your farm?</h1>
-        <p className={styles.lede}>
-          Compare today&apos;s reference prices and explore your revenue.
-        </p>
         {snapshot ? (
           <>
             <ComparisonCards snapshot={snapshot} now={now} />
@@ -65,6 +80,13 @@ export default function ComparisonView({
         )}
       </main>
       <footer className={styles.footer}>
+        <p className={styles.credits}>
+          <span className={styles.dotOfficial} aria-hidden="true" />
+          Fonterra forecast
+          {" · "}
+          <span className={styles.dotFutures} aria-hidden="true" />
+          NZX futures
+        </p>
         <p>Development preview — data is a frozen fixture, not live prices.</p>
       </footer>
     </div>
@@ -81,10 +103,13 @@ function ComparisonCards({ snapshot, now }: { snapshot: MilkSnapshot; now: numbe
         <h2 id="official-heading" className={styles.cardTitle}>
           Fonterra forecast
         </h2>
-        <p className={styles.price}>
-          ${official.midpoint.toFixed(2)}{" "}
-          <span className={styles.unit}>/kgMS</span>
-        </p>
+        <div className={styles.priceRow}>
+          <p className={styles.price}>
+            ${official.midpoint.toFixed(2)}{" "}
+            <span className={styles.unit}>/kgMS</span>
+          </p>
+          <span className={`${styles.tag} ${styles.tagOfficial}`}>FORECAST</span>
+        </div>
         <p className={styles.meta}>
           {hasRange
             ? `Range $${official.low?.toFixed(2)}-$${official.high?.toFixed(2)} /kgMS`
@@ -99,10 +124,9 @@ function ComparisonCards({ snapshot, now }: { snapshot: MilkSnapshot; now: numbe
             no change
           </p>
         )}
-        <CheckNotices
-          check={snapshot.checks?.official}
-          retrievedAt={official.retrievedAt}
-          now={now}
+        <ChipRow
+          warnings={cardWarnings(snapshot.checks?.official, official.retrievedAt, now)}
+          variant="official"
         />
         <p className={styles.meta}>
           Checked {nzDate.format(new Date(official.retrievedAt))}
@@ -127,33 +151,51 @@ function ComparisonCards({ snapshot, now }: { snapshot: MilkSnapshot; now: numbe
   );
 }
 
-// Failed checks are exposed beside the retained value; the 36-hour rule keeps
-// a stalled collector from looking current.
-function CheckNotices({
-  check,
-  retrievedAt,
-  now,
+// Warnings are independent predicates; the reassuring chip only renders when
+// none apply, so "up to date" can never sit beside a warning on the same card.
+function cardWarnings(
+  check: SourceCheck | undefined,
+  retrievedAt: string,
+  now: number,
+): string[] {
+  const { checkStale } = freshness(null, check?.checkedAt ?? retrievedAt, now);
+  const warnings: string[] = [];
+  if (check && check.outcome !== "ok") {
+    warnings.push(
+      `The latest collection on ${nzDate.format(new Date(check.checkedAt))} failed — showing the previous value.`,
+    );
+  }
+  if (checkStale) {
+    warnings.push("The last check is more than 36 hours old.");
+  }
+  return warnings;
+}
+
+function ChipRow({
+  warnings,
+  variant,
 }: {
-  check?: SourceCheck;
-  retrievedAt: string;
-  now: number;
+  warnings: string[];
+  variant: "official" | "futures";
 }) {
-  const { checkStale } = freshness(
-    null,
-    check?.checkedAt ?? retrievedAt,
-    now,
-  );
+  if (warnings.length === 0) {
+    return (
+      <p
+        className={`${styles.chip} ${
+          variant === "official" ? styles.chipOkOfficial : styles.chipOkFutures
+        }`}
+      >
+        Up to date
+      </p>
+    );
+  }
   return (
     <>
-      {check && check.outcome !== "ok" && (
-        <p className={styles.warning}>
-          The latest collection on {nzDate.format(new Date(check.checkedAt))}{" "}
-          failed — showing the previous value.
+      {warnings.map((warning) => (
+        <p key={warning} className={`${styles.chip} ${styles.chipWarn}`}>
+          {warning}
         </p>
-      )}
-      {checkStale && (
-        <p className={styles.warning}>The last check is more than 36 hours old.</p>
-      )}
+      ))}
     </>
   );
 }
@@ -194,21 +236,14 @@ function FuturesCard({
   collectedAt: string;
   now: number;
 }) {
-  if (futures === undefined) {
+  if (futures === undefined || futures.status === "unavailable") {
     return (
       <>
+        <p className={`${styles.chip} ${styles.chipUnavailable}`}>Unavailable</p>
         <p className={styles.unavailable}>
-          Futures reference is unavailable right now.
-        </p>
-        <CheckAge check={check} fallbackAt={collectedAt} now={now} />
-      </>
-    );
-  }
-  if (futures.status === "unavailable") {
-    return (
-      <>
-        <p className={styles.unavailable}>
-          {futuresUnavailableMessage(futures.reason, season)}
+          {futures === undefined
+            ? "Futures reference is unavailable right now."
+            : futuresUnavailableMessage(futures.reason, season)}
         </p>
         <CheckAge check={check} fallbackAt={collectedAt} now={now} />
       </>
@@ -231,11 +266,22 @@ function FuturesCard({
     now,
   );
 
+  const warnings = cardWarnings(check, futures.retrievedAt, now);
+  if (quoteOld) {
+    warnings.push("Quote is more than 72 hours old.");
+  }
+
   return (
     <>
-      <p className={styles.price}>
-        ${futures.price.toFixed(2)} <span className={styles.unit}>/kgMS</span>
-      </p>
+      <div className={styles.priceRow}>
+        <p className={styles.price}>
+          ${futures.price.toFixed(2)}{" "}
+          <span className={styles.unit}>/kgMS</span>
+        </p>
+        <span className={`${styles.tag} ${styles.tagFutures}`}>
+          {BASIS_TAGS[futures.basis]}
+        </span>
+      </div>
       <p className={styles.meta}>{basisLine}</p>
       <p className={styles.meta}>
         Contract {futures.contractCode} · expires{" "}
@@ -246,19 +292,12 @@ function FuturesCard({
         Traded volume {size(futures.tradedVolume)} · Open interest{" "}
         {size(futures.openInterest)}
       </p>
-      {quoteOld && (
-        <p className={styles.warning}>Quote is more than 72 hours old.</p>
-      )}
+      <ChipRow warnings={warnings} variant="futures" />
       {futures.quotedAt && (
         <p className={styles.meta}>
           Quoted {nzDateTime.format(new Date(futures.quotedAt))} (NZ time)
         </p>
       )}
-      <CheckNotices
-        check={check}
-        retrievedAt={futures.retrievedAt}
-        now={now}
-      />
       <p className={styles.meta}>
         Checked {nzDate.format(new Date(futures.retrievedAt))}
       </p>
