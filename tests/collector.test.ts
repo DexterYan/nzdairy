@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import latestSnapshot from "../fixtures/latest-snapshot.json";
+import type { MilkSnapshot } from "../lib/snapshot";
 import collector, {
   type CollectorEnv,
   type CollectionBucket,
@@ -123,6 +124,20 @@ describe("collector scheduled run", () => {
         ...latestSnapshot.futures,
         retrievedAt: "2026-09-23T06:00:00Z",
       },
+      checks: {
+        official: {
+          source: "official",
+          checkedAt: "2026-09-23T06:00:00Z",
+          outcome: "ok",
+          detail: null,
+        },
+        futures: {
+          source: "futures",
+          checkedAt: "2026-09-23T06:00:00Z",
+          outcome: "ok",
+          detail: null,
+        },
+      },
     });
   });
 
@@ -133,9 +148,18 @@ describe("collector scheduled run", () => {
       [NZX_URL]: new Response(fixture("nzx", "page-2026-09.html")),
     });
 
-    const snapshot = (await bucket.get("latest.json")?.then((o) => o?.json())) as typeof latestSnapshot;
+    const snapshot = (await bucket.get("latest.json")?.then((o) => o?.json())) as MilkSnapshot;
     expect(snapshot.official).toEqual(latestSnapshot.official);
-    expect(snapshot.futures.retrievedAt).toBe("2026-09-23T06:00:00Z");
+    expect(
+      snapshot.futures?.status === "ok" ? snapshot.futures.retrievedAt : null,
+    ).toBe("2026-09-23T06:00:00Z");
+    expect(snapshot.checks?.official).toEqual({
+      source: "official",
+      checkedAt: "2026-09-23T06:00:00Z",
+      outcome: "retained",
+      detail: "fetch-failed:status 503",
+    });
+    expect(snapshot.checks?.futures?.outcome).toBe("ok");
     // The failed source is not archived.
     expect([...bucket.store.keys()].some((key) => key.startsWith("archive/official/"))).toBe(false);
   });
@@ -147,9 +171,15 @@ describe("collector scheduled run", () => {
       [NZX_URL]: new Response(fixture("nzx", "crossed.html")),
     });
 
-    const snapshot = (await bucket.get("latest.json")?.then((o) => o?.json())) as typeof latestSnapshot;
+    const snapshot = (await bucket.get("latest.json")?.then((o) => o?.json())) as MilkSnapshot;
     expect(snapshot.futures).toEqual(latestSnapshot.futures);
     expect(snapshot.official.retrievedAt).toBe("2026-09-23T06:00:00Z");
+    expect(snapshot.checks?.futures).toEqual({
+      source: "futures",
+      checkedAt: "2026-09-23T06:00:00Z",
+      outcome: "retained",
+      detail: "unavailable:crossed",
+    });
   });
 
   it("publishes a fresh unavailable futures block when there is no prior data", async () => {
@@ -159,8 +189,14 @@ describe("collector scheduled run", () => {
       [NZX_URL]: new Response(fixture("nzx", "crossed.html")),
     });
 
-    const snapshot = (await bucket.get("latest.json")?.then((o) => o?.json())) as typeof latestSnapshot;
+    const snapshot = (await bucket.get("latest.json")?.then((o) => o?.json())) as MilkSnapshot;
     expect(snapshot.futures).toEqual({ status: "unavailable", reason: "crossed" });
+    expect(snapshot.checks?.futures).toEqual({
+      source: "futures",
+      checkedAt: "2026-09-23T06:00:00Z",
+      outcome: "unavailable",
+      detail: "unavailable:crossed",
+    });
   });
 
   it("does not publish when the official forecast is unusable and nothing can be retained", async () => {

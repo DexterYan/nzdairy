@@ -1,4 +1,10 @@
-import type { FuturesBlock, FuturesReason, MilkSnapshot } from "../lib/snapshot";
+import { freshness } from "../lib/freshness";
+import type {
+  FuturesBlock,
+  FuturesReason,
+  MilkSnapshot,
+  SourceCheck,
+} from "../lib/snapshot";
 import RevenuePanel from "./revenue-panel";
 import styles from "./page.module.css";
 
@@ -22,9 +28,16 @@ const nzInt = new Intl.NumberFormat("en-NZ");
 
 export default function ComparisonView({
   snapshot,
+  nowMs,
 }: {
   snapshot: MilkSnapshot | null;
+  nowMs?: number;
 }) {
+  // Staleness is a display rule evaluated at request time, so retained data
+  // keeps aging even while the collector fails.
+  // Request-time clock is sound here: force-dynamic server component.
+  // eslint-disable-next-line react-hooks/purity
+  const now = nowMs ?? Date.now();
   return (
     <div className={styles.shell}>
       <header className={styles.banner}>
@@ -38,7 +51,7 @@ export default function ComparisonView({
         </p>
         {snapshot ? (
           <>
-            <ComparisonCards snapshot={snapshot} />
+            <ComparisonCards snapshot={snapshot} now={now} />
             <RevenuePanel
               official={snapshot.official}
               futures={snapshot.futures}
@@ -58,7 +71,7 @@ export default function ComparisonView({
   );
 }
 
-function ComparisonCards({ snapshot }: { snapshot: MilkSnapshot }) {
+function ComparisonCards({ snapshot, now }: { snapshot: MilkSnapshot; now: number }) {
   const { official } = snapshot;
   const hasRange = official.low !== null && official.high !== null;
 
@@ -86,6 +99,11 @@ function ComparisonCards({ snapshot }: { snapshot: MilkSnapshot }) {
             no change
           </p>
         )}
+        <CheckNotices
+          check={snapshot.checks?.official}
+          retrievedAt={official.retrievedAt}
+          now={now}
+        />
         <p className={styles.meta}>
           Checked {nzDate.format(new Date(official.retrievedAt))}
         </p>
@@ -97,18 +115,58 @@ function ComparisonCards({ snapshot }: { snapshot: MilkSnapshot }) {
         <h2 id="futures-heading" className={styles.cardTitle}>
           Futures reference
         </h2>
-        <FuturesCard futures={snapshot.futures} season={snapshot.season} />
+        <FuturesCard
+          futures={snapshot.futures}
+          check={snapshot.checks?.futures}
+          season={snapshot.season}
+          now={now}
+        />
       </article>
     </section>
   );
 }
 
+// Failed checks are exposed beside the retained value; the 36-hour rule keeps
+// a stalled collector from looking current.
+function CheckNotices({
+  check,
+  retrievedAt,
+  now,
+}: {
+  check?: SourceCheck;
+  retrievedAt: string;
+  now: number;
+}) {
+  const { checkStale } = freshness(
+    null,
+    check?.checkedAt ?? retrievedAt,
+    now,
+  );
+  return (
+    <>
+      {check && check.outcome !== "ok" && (
+        <p className={styles.warning}>
+          The latest collection on {nzDate.format(new Date(check.checkedAt))}{" "}
+          failed — showing the previous value.
+        </p>
+      )}
+      {checkStale && (
+        <p className={styles.warning}>The last check is more than 36 hours old.</p>
+      )}
+    </>
+  );
+}
+
 function FuturesCard({
   futures,
+  check,
   season,
+  now,
 }: {
   futures: FuturesBlock | undefined;
+  check?: SourceCheck;
   season: string;
+  now: number;
 }) {
   if (futures === undefined) {
     return (
@@ -133,6 +191,13 @@ function FuturesCard({
         : "Prior settlement";
   const size = (value: number | null) =>
     value === null ? "n/a" : nzInt.format(value);
+  // The persisted stale flag freezes at collection time; the 72-hour rule is
+  // re-evaluated here so retained quotes keep aging.
+  const { quoteOld } = freshness(
+    futures.quotedAt,
+    check?.checkedAt ?? futures.retrievedAt,
+    now,
+  );
 
   return (
     <>
@@ -149,7 +214,7 @@ function FuturesCard({
         Traded volume {size(futures.tradedVolume)} · Open interest{" "}
         {size(futures.openInterest)}
       </p>
-      {futures.stale && (
+      {quoteOld && (
         <p className={styles.warning}>Quote is more than 72 hours old.</p>
       )}
       {futures.quotedAt && (
@@ -157,6 +222,11 @@ function FuturesCard({
           Quoted {nzDateTime.format(new Date(futures.quotedAt))} (NZ time)
         </p>
       )}
+      <CheckNotices
+        check={check}
+        retrievedAt={futures.retrievedAt}
+        now={now}
+      />
       <p className={styles.meta}>
         Checked {nzDate.format(new Date(futures.retrievedAt))}
       </p>

@@ -8,9 +8,11 @@ afterEach(cleanup);
 
 const snapshot = fixture as unknown as MilkSnapshot;
 const okFutures = snapshot.futures as Extract<FuturesBlock, { status: "ok" }>;
+// Fixed display clock: the fixture quote is 6.5h old, checks are current.
+const FIXED_NOW = Date.parse("2026-09-23T06:00:00Z");
 
-function view(withSnapshot: MilkSnapshot | null = snapshot) {
-  render(<ComparisonView snapshot={withSnapshot} />);
+function view(withSnapshot: MilkSnapshot | null = snapshot, nowMs: number = FIXED_NOW) {
+  render(<ComparisonView snapshot={withSnapshot} nowMs={nowMs} />);
 }
 
 describe("MilkCompass page shell", () => {
@@ -82,6 +84,7 @@ describe("official forecast card", () => {
   it("notes when the latest announcement left the forecast unchanged", () => {
     render(
       <ComparisonView
+        nowMs={FIXED_NOW}
         snapshot={{
           ...snapshot,
           official: {
@@ -151,12 +154,13 @@ describe("futures reference card", () => {
     ).toBeDefined();
   });
 
-  it("warns when the quote is older than 72 hours", () => {
+  it("warns when the quote is older than 72 hours at display time, whatever the collector recorded", () => {
     render(
       <ComparisonView
+        nowMs={FIXED_NOW}
         snapshot={{
           ...snapshot,
-          futures: { ...okFutures, stale: true },
+          futures: { ...okFutures, stale: false, quotedAt: "2026-09-19T00:00:00Z" },
         }}
       />,
     );
@@ -164,6 +168,171 @@ describe("futures reference card", () => {
     expect(
       screen.getByText("Quote is more than 72 hours old."),
     ).toBeDefined();
+  });
+
+  it("does not warn about a fresh quote the collector flagged stale", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: { ...okFutures, stale: true },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Quote is more than 72 hours old.")).toBeNull();
+  });
+
+  it("warns on both cards when the latest collection check is more than 36 hours old", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-21T00:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-21T00:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getAllByText("The last check is more than 36 hours old."),
+    ).toHaveLength(2);
+  });
+
+  it("does not warn about check freshness while checks stay current", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByText("The last check is more than 36 hours old."),
+    ).toBeNull();
+  });
+
+  it("says when a failed official check left the previous value on show", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "retained",
+              detail: "fetch-failed: status 503",
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "The latest collection on 23 Sept 2026 failed — showing the previous value.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("says when a failed futures check left the previous value on show", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "retained",
+              detail: "unavailable:crossed",
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "The latest collection on 23 Sept 2026 failed — showing the previous value.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("does not report a failed collection when both checks succeeded", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByText(
+        "The latest collection on 23 Sept 2026 failed — showing the previous value.",
+      ),
+    ).toBeNull();
   });
 
   it("links to the NZX quotes page", () => {
@@ -176,6 +345,7 @@ describe("futures reference card", () => {
   it("names a last-trade basis with its trade date", () => {
     render(
       <ComparisonView
+        nowMs={FIXED_NOW}
         snapshot={{
           ...snapshot,
           futures: {
@@ -197,6 +367,7 @@ describe("futures reference card", () => {
   it("names a prior-settlement basis plainly", () => {
     render(
       <ComparisonView
+        nowMs={FIXED_NOW}
         snapshot={{
           ...snapshot,
           futures: {
@@ -217,6 +388,7 @@ describe("futures reference card", () => {
   it("explains deterministic unavailability reasons", () => {
     render(
       <ComparisonView
+        nowMs={FIXED_NOW}
         snapshot={{
           ...snapshot,
           futures: { status: "unavailable", reason: "crossed" },
@@ -232,6 +404,7 @@ describe("futures reference card", () => {
   it("exposes a futures check that never collected any data", () => {
     render(
       <ComparisonView
+        nowMs={FIXED_NOW}
         snapshot={{
           ...snapshot,
           futures: { status: "unavailable", reason: "not-collected" },
@@ -249,7 +422,7 @@ describe("futures reference card", () => {
   it("shows a plain unavailable state when no futures block was collected", () => {
     const { futures, ...officialOnly } = snapshot;
     void futures;
-    render(<ComparisonView snapshot={officialOnly} />);
+    render(<ComparisonView snapshot={officialOnly} nowMs={FIXED_NOW} />);
 
     expect(
       screen.getByText("Futures reference is unavailable right now."),

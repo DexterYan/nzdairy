@@ -60,12 +60,25 @@ export interface OfficialForecast {
   status: "ok";
 }
 
+export type CheckOutcome = "ok" | "retained" | "unavailable";
+
+// Per-source record of the latest collection check, kept apart from the data
+// timestamps: retained values keep their original timestamps while the check
+// exposes what happened on the failed run.
+export interface SourceCheck {
+  source: "official" | "futures";
+  checkedAt: string;
+  outcome: CheckOutcome;
+  detail: string | null;
+}
+
 export interface MilkSnapshot {
   schemaVersion: 1;
   season: string;
   collectedAt: string;
   official: OfficialForecast;
   futures?: FuturesBlock;
+  checks?: { official: SourceCheck; futures: SourceCheck };
 }
 
 export interface SnapshotObject {
@@ -109,7 +122,59 @@ function parseSnapshot(value: unknown): MilkSnapshot | null {
     futures = parsed;
   }
 
-  return { schemaVersion: 1, season, collectedAt, official, futures };
+  let checks: MilkSnapshot["checks"];
+  if (candidate.checks !== undefined) {
+    const parsed = parseChecks(candidate.checks, collectedAt);
+    if (parsed === null) return null;
+    checks = parsed;
+  }
+
+  return { schemaVersion: 1, season, collectedAt, official, futures, checks };
+}
+
+function parseChecks(
+  value: unknown,
+  collectedAt: string,
+): { official: SourceCheck; futures: SourceCheck } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  const official = parseSourceCheck(candidate.official, "official", collectedAt);
+  const futures = parseSourceCheck(candidate.futures, "futures", collectedAt);
+  if (official === null || futures === null) return null;
+  // Publish never writes a snapshot without a valid official value, so its
+  // check can only report success or retention.
+  if (official.outcome === "unavailable") return null;
+  return { official, futures };
+}
+
+function parseSourceCheck(
+  value: unknown,
+  source: "official" | "futures",
+  collectedAt: string,
+): SourceCheck | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.source !== source) return null;
+
+  const checkedAt = isoDateString(candidate.checkedAt);
+  if (checkedAt === null || Date.parse(checkedAt) < Date.parse(collectedAt)) {
+    return null;
+  }
+
+  const outcome = candidate.outcome;
+  if (outcome !== "ok" && outcome !== "retained" && outcome !== "unavailable") {
+    return null;
+  }
+  // A successful check has nothing to explain; a failed one must.
+  if (outcome === "ok") {
+    return candidate.detail === null
+      ? { source, checkedAt, outcome, detail: null }
+      : null;
+  }
+  const detail = nonEmptyString(candidate.detail);
+  return detail === null
+    ? null
+    : { source, checkedAt, outcome, detail };
 }
 
 function parseFuturesBlock(

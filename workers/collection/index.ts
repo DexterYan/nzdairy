@@ -16,6 +16,7 @@ import {
   type MilkSnapshot,
   type OfficialForecast,
   type SnapshotObject,
+  type SourceCheck,
 } from "../../lib/snapshot";
 import { fetchSource } from "./fetch-source";
 
@@ -130,12 +131,17 @@ async function collect(
     return;
   }
 
+  const checkedAt = isoInstant(now.getTime());
   const snapshot: MilkSnapshot = {
     schemaVersion: 1,
     season,
-    collectedAt: isoInstant(now.getTime()),
+    collectedAt: checkedAt,
     official,
     futures,
+    checks: {
+      official: officialCheck(officialOutcome, checkedAt),
+      futures: futuresCheck(futuresOutcome, futures, checkedAt),
+    },
   };
   await env.SNAPSHOTS.put(LATEST_SNAPSHOT_KEY, JSON.stringify(snapshot));
   log("collector.publish.succeeded", {
@@ -144,6 +150,28 @@ async function collect(
     officialRetained: officialOutcome !== "ok",
     futuresRetained: futuresOutcome !== "ok",
   });
+}
+
+// A published snapshot always carries a valid official value, so its failed
+// check is always a retention; "unavailable" is unreachable for the official.
+function officialCheck(outcome: string, checkedAt: string): SourceCheck {
+  return outcome === "ok"
+    ? { source: "official", checkedAt, outcome: "ok", detail: null }
+    : { source: "official", checkedAt, outcome: "retained", detail: outcome };
+}
+
+function futuresCheck(
+  outcome: string,
+  futures: FuturesBlock,
+  checkedAt: string,
+): SourceCheck {
+  if (outcome === "ok") {
+    return { source: "futures", checkedAt, outcome: "ok", detail: null };
+  }
+  // An ok block after a failed check is the retained prior reference.
+  return futures.status === "ok"
+    ? { source: "futures", checkedAt, outcome: "retained", detail: outcome }
+    : { source: "futures", checkedAt, outcome: "unavailable", detail: outcome };
 }
 
 async function archive(

@@ -143,6 +143,170 @@ describe("readLatestSnapshot", () => {
     expect(snapshot?.futures).toEqual({ status: "unavailable", reason: "not-collected" });
   });
 
+  it("round-trips per-source check outcomes recorded by the collector", async () => {
+    const checks = {
+      official: {
+        source: "official",
+        checkedAt: "2026-09-23T06:00:12Z",
+        outcome: "retained",
+        detail: "fetch-failed: status 503",
+      },
+      futures: {
+        source: "futures",
+        checkedAt: "2026-09-23T06:00:12Z",
+        outcome: "ok",
+        detail: null,
+      },
+    };
+    const snapshot = await readLatestSnapshot(bucketWith({ ...fixture, checks }));
+
+    expect(snapshot?.checks).toEqual(checks);
+  });
+
+  it("rejects checks with an unknown outcome", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        checks: {
+          official: {
+            source: "official",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "skipped",
+            detail: null,
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("rejects an official check claiming unavailable, which publish never writes", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        checks: {
+          official: {
+            source: "official",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "unavailable",
+            detail: "unavailable:unreadable",
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("rejects a failed check that carries no detail", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        checks: {
+          official: {
+            source: "official",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "retained",
+            detail: null,
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("rejects a successful check that carries a detail", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        checks: {
+          official: {
+            source: "official",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: "unexpected",
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("rejects a check whose time predates its collection run", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        checks: {
+          official: {
+            source: "official",
+            checkedAt: "2026-09-22T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("rejects a check whose source does not match its slot", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        checks: {
+          official: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+          futures: {
+            source: "futures",
+            checkedAt: "2026-09-23T06:00:12Z",
+            outcome: "ok",
+            detail: null,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
   it("returns null when the futures price is not a positive number", async () => {
     const snapshot = await readLatestSnapshot(
       bucketWith({ ...fixture, futures: { ...fixture.futures, price: 0 } }),
