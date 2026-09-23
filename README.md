@@ -16,9 +16,10 @@ npm run build:worker   # OpenNext bundle for Cloudflare Workers
 npm run preview        # local Workers preview of the production bundle
 npm run dev:collector  # collection Worker with scheduled-handler testing
 npm run seed:snapshot  # seed local R2 with the fixture snapshot
+npm run test:e2e       # journey + degraded-state checks against the preview
 ```
 
-Run `npm run seed:snapshot` once before `npm run preview` to see comparison values; local R2 state persists under `.wrangler/`. Two Workers are configured: `wrangler.jsonc` (web, reads snapshots from R2) and `wrangler.collection.jsonc` (scheduled collector, daily at 06:00 UTC, logic arrives with Task 7).
+Run `npm run seed:snapshot` once before `npm run preview` to see comparison values; local R2 state persists under `.wrangler/`. Two Workers are configured: `wrangler.jsonc` (web, reads snapshots from R2) and `wrangler.collection.jsonc` (scheduled collector, daily at 06:00 UTC, archiving each source result before publishing the combined snapshot). Public deployment is blocked until NZX/SGX display rights are documented — see [Operations](docs/operations.md).
 
 Node 22 and npm are the toolchain; `package-lock.json` is committed.
 
@@ -34,5 +35,6 @@ Node 22 and npm are the toolchain; `package-lock.json` is committed.
 ## Documents
 
 - [Implementation plan](docs/implementation-plan.md)
+- [Operations](docs/operations.md)
 - [UI preview](docs/ui-preview.md)
 - [Implementation tasks](tasks/todo.md)

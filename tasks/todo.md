@@ -152,13 +152,13 @@
 **Description:** Finish responsive styling, accessibility, operational documentation, and complete target-runtime verification.
 
 **Acceptance criteria:**
-- [ ] The page works at 375px and desktop widths with visible focus, labels, and text-based warnings.
-- [ ] Documentation covers local operation, source assumptions, data-rights gate, and rollback.
-- [ ] Public deployment remains blocked until market-data display rights are documented.
+- [x] The page works at 375px and desktop widths with visible focus, labels, and text-based warnings.
+- [x] Documentation covers local operation, source assumptions, data-rights gate, and rollback.
+- [x] Public deployment remains blocked until market-data display rights are documented.
 
 **Verification:**
-- [ ] `npm run lint && npm run typecheck && npm test && npm run build && npm run build:worker && npm run test:e2e`
-- [ ] Run the main journey and degraded-data cases against the OpenNext preview.
+- [x] `npm run lint && npm run typecheck && npm test && npm run build && npm run build:worker && npm run test:e2e`
+- [x] Run the main journey and degraded-data cases against the OpenNext preview.
 
 **Dependencies:** Tasks 6 and 7
 
@@ -168,7 +168,7 @@
 
 ## Checkpoint: Ready for review
 
-- [ ] Every task's acceptance criteria and verification steps pass.
-- [ ] No task remains larger than a focused implementation session.
-- [ ] Source attribution and redistribution status are documented.
+- [x] Every task's acceptance criteria and verification steps pass.
+- [x] No task remains larger than a focused implementation session.
+- [x] Source attribution and redistribution status are documented.
 - [ ] A human has reviewed the complete release before any public deployment.
