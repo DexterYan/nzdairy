@@ -1,8 +1,8 @@
 # NZ Dairy
 
-MilkCompass is a planned English-language decision page for New Zealand Fonterra suppliers. Its first release will compare Fonterra's current-season forecast with a timestamped milk-price futures reference and translate price differences into annual milk revenue.
+MilkCompass is an English-language decision page for New Zealand Fonterra suppliers. It compares Fonterra's current-season farmgate milk price forecast with a timestamped MKP futures reference and translates price differences into annual gross milk revenue under editable scenarios.
 
-This repository contains the reviewed implementation plan, a layout-only preview, and the application scaffold (Next.js App Router, TypeScript, OpenNext on Cloudflare Workers). The page currently renders a fixture snapshot; live data integration has not started.
+The first release is implemented: Fonterra and NZX MKP parsers, a scheduled collection Worker (06:00 UTC) writing private versioned snapshots to R2, and the comparison/calculator page (Next.js App Router, TypeScript, OpenNext on Cloudflare Workers). Local web previews render a fixture-seeded snapshot, while the collector itself always fetches the live sources; operational readiness of scheduled collection in a provisioned environment is not yet verified. Public deployment is blocked until NZX/SGX display rights are documented. Active work follows the [next-release engineering contract](docs/next-release-plan.md) — market changes and farm impact ([tasks](tasks/next-release/todo.md)).
 
 ## Development
 

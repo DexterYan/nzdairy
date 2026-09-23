@@ -15,12 +15,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Define fixture-testable field and access requirements without waiting for provider selection.
 
 **Acceptance criteria:**
-- [ ] Document required MKP fields, effective-time semantics, history needs and unresolved access/display/retention rights; this task can finish with provider choice pending.
-- [ ] Distinguish current local collection from future production access; do not claim the existing collector is fixture-only.
-- [ ] Correct the README baseline and link the next-release engineering contract without expanding the completed design-extension SPEC.md.
+- [x] Document required MKP fields, effective-time semantics, history needs and unresolved access/display/retention rights; this task can finish with provider choice pending.
+- [x] Distinguish current local collection from future production access; do not claim the existing collector is fixture-only.
+- [x] Correct the README baseline and link the next-release engineering contract without expanding the completed design-extension SPEC.md.
 
 **Verification:**
-- [ ] Review the requirements matrix against existing parser fields and confirm public deployment flags remain disabled.
+- [x] Review the requirements matrix against existing parser fields and confirm public deployment flags remain disabled.
 
 **Dependencies:** None.
 

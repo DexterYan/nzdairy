@@ -55,7 +55,9 @@ database is assumed.
 | NZ milk collections | Fonterra Global Dairy Update | Confirm coverage is Fonterra NZ collections, period, unit, revisions and reuse basis. |
 | WMP/SMP auction results | GDT authorised data service | Confirm product/contract basis and external-display rights; ordinary subscriber access is insufficient evidence. |
 
-Evaluate Vesper as one vendor candidate, not an assumed dependency. Its public API
+Field-level requirements grounded in the current parsers are documented in
+[Data rights](data-rights.md) (Task 13a); a provider must satisfy that matrix
+before production use. Evaluate Vesper as one vendor candidate, not an assumed dependency. Its public API
 offering does not establish exact MKP coverage or redistribution permission. Record
 the selected provider, recurring cost, entitlement scope and fallback in
 `docs/data-rights.md`. Do not assume a paid API subscription permits public display.
