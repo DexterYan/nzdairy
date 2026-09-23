@@ -27,8 +27,8 @@ readiness must still be verified separately from the presence of code.
 
 The first-release plan and design-extension spec remain the contracts for existing
 behaviour. This proposal adds history and market context in a subsequent release;
-it does not retroactively change their acceptance criteria. Implementation should
-write `docs/next-release-design.md` before changing presentation. This plan is the
+it does not retroactively change their acceptance criteria. Presentation changes
+follow [`docs/next-release-design.md`](next-release-design.md) (Task 13b). This plan is the
 next-release engineering contract once approved; `SPEC.md` remains the completed
 design-extension contract and is not expanded to cover collector changes.
 Tasks 1–12 and their outstanding launch checks remain intact.

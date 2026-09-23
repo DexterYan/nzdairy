@@ -33,12 +33,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Write a separate design extension for history, impact and independent context states.
 
 **Acceptance criteria:**
-- [ ] Create docs/next-release-design.md with layout, SVG/text-table behaviour and empty, stale, basis-changed, source-changed and deferred-context states.
-- [ ] Keep production state in RevenuePanel; pass validated changes into it and preserve scenarios, validation and local persistence.
-- [ ] Specify fixture/collected provenance labels and source-specific freshness presentation; preserve existing tokens and accessible controls.
+- [x] Create docs/next-release-design.md with layout, SVG/text-table behaviour and empty, stale, basis-changed, source-changed and deferred-context states.
+- [x] Keep production state in RevenuePanel; pass validated changes into it and preserve scenarios, validation and local persistence.
+- [x] Specify fixture/collected provenance labels and source-specific freshness presentation; preserve existing tokens and accessible controls.
 
 **Verification:**
-- [ ] Review the design against docs/design.md and this release contract, including 375px layout and text alternatives.
+- [x] Review the design against docs/design.md and this release contract, including 375px layout and text alternatives.
 
 **Dependencies:** None; align with 13a before contract freeze.
 
