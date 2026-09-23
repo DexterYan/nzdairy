@@ -228,14 +228,14 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 **Description:** Replace the results definition list with the tile grid from design.md §4.4 — sentence-case label, value, sub-caption — including the signed difference tile. Full-dollar figures are retained; the assumptions sentence is the rounding contract and stays unchanged.
 
 **Acceptance criteria:**
-- [ ] Tile presence follows the state table in design.md §4.4: official and sensitivity tiles render for valid, finite production; the futures and difference tiles additionally require futures status ok — so futures-unavailable renders two tiles plus a guidance cell, and blank/invalid/overflow production renders guidance only, no tiles.
-- [ ] The difference tile carries sign + word + colour (never colour alone); the "rounds to NZ$0" case keeps its sentence.
-- [ ] No zero is fabricated from missing or invalid data; genuine zeros (0 kgMS production, a difference that rounds to zero) render as themselves per design.md §5.
-- [ ] Tile values are full-dollar NZD with proportional figures (no `tabular-nums` on tiles, no compact notation); scenario rows keep `tabular-nums`; the assumptions sentence is unchanged; tiles collapse to one column below 45rem.
+- [x] Tile presence follows the state table in design.md §4.4: official and sensitivity tiles render for valid, finite production; the futures and difference tiles additionally require futures status ok — so futures-unavailable renders two tiles plus a guidance cell, and blank/invalid/overflow production renders guidance only, no tiles.
+- [x] The difference tile carries sign + word + colour (never colour alone); the "rounds to NZ$0" case keeps its sentence.
+- [x] No zero is fabricated from missing or invalid data; genuine zeros (0 kgMS production, a difference that rounds to zero) render as themselves per design.md §5.
+- [x] Tile values are full-dollar NZD with proportional figures (no `tabular-nums` on tiles, no compact notation); scenario rows keep `tabular-nums`; the assumptions sentence is unchanged; tiles collapse to one column below 45rem.
 
 **Verification:**
-- [ ] Extend revenue-panel tests to cover tile markup and every applicable state-matrix row from design.md §5.
-- [ ] `npm run typecheck && npm run lint && npm test && npm run build`
+- [x] Extend revenue-panel tests to cover tile markup and every applicable state-matrix row from design.md §5.
+- [x] `npm run typecheck && npm run lint && npm test && npm run build`
 
 **Dependencies:** Task 9
 

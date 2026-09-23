@@ -132,31 +132,42 @@ export default function RevenuePanel({
           This production is too large to calculate.
         </p>
       ) : (
-        <dl className={styles.results}>
-          <div className={styles.resultRow}>
-            <dt>Official forecast revenue</dt>
-            <dd>{formatRevenue(officialRevenue as number)}</dd>
+        <dl className={styles.tiles}>
+          <div className={styles.tile}>
+            <dt className={styles.tileLabel}>Official forecast revenue</dt>
+            <dd className={styles.tileValue}>
+              {formatRevenue(officialRevenue as number)}
+            </dd>
+            <dd className={styles.tileCaption}>
+              at ${official.midpoint.toFixed(2)} /kgMS
+            </dd>
           </div>
           {futuresRevenue === null ? (
-            <div className={styles.resultRow}>
-              <dt>Futures reference revenue</dt>
+            <div className={styles.tileGuidance}>
+              <dt className={styles.tileLabel}>Futures reference revenue</dt>
               <dd>Futures revenue is unavailable right now.</dd>
             </div>
           ) : (
             <>
-              <div className={styles.resultRow}>
-                <dt>Futures reference revenue</dt>
-                <dd>{formatRevenue(futuresRevenue)}</dd>
+              <div className={styles.tile}>
+                <dt className={styles.tileLabel}>Futures reference revenue</dt>
+                <dd className={styles.tileValue}>{formatRevenue(futuresRevenue)}</dd>
+                <dd className={styles.tileCaption}>
+                  at ${futuresQuote?.price.toFixed(2)} /kgMS
+                </dd>
               </div>
-              <div className={styles.resultRow}>
-                <dt>Futures versus official forecast</dt>
-                <dd>{differenceLine(futuresRevenue, officialRevenue as number)}</dd>
-              </div>
+              <DeltaTile
+                futuresRevenue={futuresRevenue}
+                officialRevenue={officialRevenue as number}
+              />
             </>
           )}
-          <div className={styles.resultRow}>
-            <dt>Sensitivity to a $0.50/kgMS price change</dt>
-            <dd>{formatRevenue(priceSensitivity(production))}</dd>
+          <div className={styles.tile}>
+            <dt className={styles.tileLabel}>$0.50/kgMS sensitivity</dt>
+            <dd className={styles.tileValue}>
+              {formatRevenue(priceSensitivity(production))}
+            </dd>
+            <dd className={styles.tileCaption}>per $0.50 move</dd>
           </div>
         </dl>
       )}
@@ -222,14 +233,44 @@ export default function RevenuePanel({
   );
 }
 
-function differenceLine(futuresRevenue: number, officialRevenue: number): string {
+// The delta carries sign, word, and colour — three channels, never colour alone.
+function DeltaTile({
+  futuresRevenue,
+  officialRevenue,
+}: {
+  futuresRevenue: number;
+  officialRevenue: number;
+}) {
   const difference = futuresRevenue - officialRevenue;
   // Below half a dollar the rounded figures show no difference at all.
   if (Math.abs(difference) < 0.5) {
-    return "The revenue difference rounds to NZ$0.";
+    return (
+      <div className={styles.tile}>
+        <dt className={styles.tileLabel}>Futures vs official</dt>
+        <dd className={styles.tileValue}>{formatRevenue(0)}</dd>
+        <dd className={styles.tileCaption}>
+          The revenue difference rounds to NZ$0.
+        </dd>
+      </div>
+    );
   }
-  const direction = difference > 0 ? "above" : "below";
-  return `${formatRevenue(Math.abs(difference))} ${direction} the official forecast`;
+  const above = difference > 0;
+  return (
+    <div className={styles.tile}>
+      <dt className={styles.tileLabel}>Futures vs official</dt>
+      <dd
+        className={`${styles.tileValue} ${
+          above ? styles.tileValueUp : styles.tileValueDown
+        }`}
+      >
+        {above ? "+" : "-"}
+        {formatRevenue(Math.abs(difference))}
+      </dd>
+      <dd className={styles.tileCaption}>
+        {above ? "above" : "below"} the official forecast
+      </dd>
+    </div>
+  );
 }
 
 function resolveStorage(explicit: Storage | null | undefined): Storage | null {

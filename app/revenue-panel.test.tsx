@@ -78,28 +78,25 @@ describe("RevenuePanel", () => {
 
     expect(screen.getAllByText("NZ$1,425,000").length).toBe(2);
     expect(screen.getByText("NZ$1,481,250")).toBeDefined();
-    expect(
-      screen.getByText("NZ$56,250 above the official forecast"),
-    ).toBeDefined();
+    expect(screen.getByText("+NZ$56,250")).toBeDefined();
+    expect(screen.getByText("above the official forecast")).toBeDefined();
   });
 
   it("shows the plus or minus $0.50/kgMS sensitivity", () => {
     panel();
     enterProduction("150000");
 
-    expect(
-      screen.getByText("Sensitivity to a $0.50/kgMS price change"),
-    ).toBeDefined();
+    expect(screen.getByText("$0.50/kgMS sensitivity")).toBeDefined();
     expect(screen.getByText("NZ$75,000")).toBeDefined();
+    expect(screen.getByText("per $0.50 move")).toBeDefined();
   });
 
   it("describes a futures reference below the official forecast", () => {
     panel({ ...okFutures, basis: "prior-settlement", price: 9, bid: null, offer: null, last: null });
     enterProduction("150000");
 
-    expect(
-      screen.getByText("NZ$75,000 below the official forecast"),
-    ).toBeDefined();
+    expect(screen.getByText("-NZ$75,000")).toBeDefined();
+    expect(screen.getByText("below the official forecast")).toBeDefined();
   });
 
   it("describes a sub-dollar revenue difference without claiming the prices match", () => {
@@ -133,9 +130,8 @@ describe("RevenuePanel", () => {
     panel({ ...okFutures, basis: "prior-settlement", price: 9, bid: null, offer: null, last: null });
     enterProduction("1");
 
-    expect(
-      screen.getByText("NZ$1 below the official forecast"),
-    ).toBeDefined();
+    expect(screen.getByText("-NZ$1")).toBeDefined();
+    expect(screen.getByText("below the official forecast")).toBeDefined();
   });
 
   it("guides when finite production overflows the revenue calculation", () => {
@@ -152,7 +148,7 @@ describe("RevenuePanel", () => {
     panel();
     enterProduction("0");
 
-    expect(screen.getAllByText("NZ$0")).toHaveLength(6);
+    expect(screen.getAllByText("NZ$0")).toHaveLength(7);
   });
 
   it("guides non-numeric input without rendering results", () => {
@@ -195,6 +191,120 @@ describe("RevenuePanel", () => {
     expect(section.textContent).toContain("gross full-season milk revenue");
     expect(section.textContent).toContain("GST");
     expect(section.textContent).toContain("rounded to the nearest dollar");
+  });
+});
+
+describe("stat tiles", () => {
+  it("renders four tiles with labels, values, and sub-captions", () => {
+    panel();
+    enterProduction("150000");
+
+    for (const label of [
+      "Official forecast revenue",
+      "Futures reference revenue",
+      "Futures vs official",
+      "$0.50/kgMS sensitivity",
+    ]) {
+      expect(screen.getByText(label)).toBeDefined();
+    }
+    expect(screen.getAllByText("NZ$1,425,000").length).toBe(2);
+    expect(screen.getByText("NZ$1,481,250")).toBeDefined();
+    expect(screen.getByText("+NZ$56,250")).toBeDefined();
+    expect(screen.getAllByText("NZ$75,000").length).toBe(1);
+    expect(screen.getByText("at $9.50 /kgMS")).toBeDefined();
+    expect(screen.getByText("at $9.88 /kgMS")).toBeDefined();
+    expect(screen.getByText("per $0.50 move")).toBeDefined();
+  });
+
+  it("colours the delta value only through up and down classes", () => {
+    panel();
+    enterProduction("150000");
+    expect(screen.getByText("+NZ$56,250").className).toContain("tileValueUp");
+
+    cleanup();
+    panel({ ...okFutures, basis: "prior-settlement", price: 9, bid: null, offer: null, last: null });
+    enterProduction("150000");
+    expect(screen.getByText("-NZ$75,000").className).toContain("tileValueDown");
+
+    cleanup();
+    panel({ ...okFutures, basis: "prior-settlement", price: 9.5, bid: null, offer: null, last: null });
+    enterProduction("150000");
+    // Equal prices: every tile except the delta shows a nonzero figure.
+    const tileValues = screen
+      .getAllByText("NZ$0")
+      .filter((el) => el.className.includes("tileValue"));
+    expect(tileValues).toHaveLength(1);
+    for (const el of tileValues) {
+      expect(el.className).not.toContain("tileValueUp");
+      expect(el.className).not.toContain("tileValueDown");
+    }
+  });
+
+  it("renders two tiles and a guidance cell when futures is unavailable", () => {
+    panel({ status: "unavailable", reason: "crossed" });
+    enterProduction("150000");
+
+    expect(screen.getByText("Official forecast revenue")).toBeDefined();
+    expect(screen.getByText("$0.50/kgMS sensitivity")).toBeDefined();
+    expect(screen.queryByText("Futures vs official")).toBeNull();
+    expect(screen.queryByText("NZ$1,481,250")).toBeNull();
+    expect(
+      screen.getByText("Futures revenue is unavailable right now."),
+    ).toBeDefined();
+  });
+
+  it("renders two tiles and a guidance cell when the futures block is absent", () => {
+    // Render directly: the panel() helper's default would fill undefined back in.
+    render(
+      <RevenuePanel
+        official={official}
+        futures={undefined}
+        season="2026/27"
+      />,
+    );
+    enterProduction("150000");
+
+    expect(screen.getByText("Official forecast revenue")).toBeDefined();
+    expect(screen.getByText("$0.50/kgMS sensitivity")).toBeDefined();
+    expect(screen.queryByText("Futures vs official")).toBeNull();
+    expect(
+      screen.getByText("Futures revenue is unavailable right now."),
+    ).toBeDefined();
+  });
+
+  it("renders all four tiles when no range is published", () => {
+    panel(okFutures, "2026/27", undefined, {
+      ...official,
+      low: null,
+      high: null,
+      rangeSource: "none",
+    });
+    enterProduction("150000");
+
+    expect(screen.getByText("Futures reference revenue")).toBeDefined();
+    expect(screen.getByText("Futures vs official")).toBeDefined();
+  });
+
+  it("renders no tiles while production is blank", () => {
+    panel();
+
+    expect(screen.queryByText("Official forecast revenue")).toBeNull();
+    expect(screen.queryByText("$0.50/kgMS sensitivity")).toBeNull();
+  });
+
+  it("renders no tiles for invalid production", () => {
+    panel();
+    enterProduction("abc");
+
+    expect(screen.queryByText("Official forecast revenue")).toBeNull();
+  });
+
+  it("renders no tiles when the calculation overflows", () => {
+    panel();
+    enterProduction("9".repeat(308));
+
+    expect(screen.queryByText("Official forecast revenue")).toBeNull();
+    expect(screen.queryByText("$0.50/kgMS sensitivity")).toBeNull();
   });
 });
 
