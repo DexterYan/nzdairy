@@ -1,16 +1,35 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fixture from "../fixtures/latest-snapshot.json";
 import type { FuturesBlock, OfficialForecast } from "../lib/snapshot";
 import RevenuePanel from "./revenue-panel";
 
 afterEach(cleanup);
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 const official = fixture.official as OfficialForecast;
 const okFutures = fixture.futures as Extract<FuturesBlock, { status: "ok" }>;
 
-function panel(futures: FuturesBlock | undefined = okFutures) {
-  render(<RevenuePanel official={official} futures={futures} />);
+function panel(
+  futures: FuturesBlock | undefined = okFutures,
+  season = "2026/27",
+  storage: Storage | null | undefined = undefined,
+  withOfficial: OfficialForecast = official,
+) {
+  render(
+    <RevenuePanel
+      official={withOfficial}
+      futures={futures}
+      season={season}
+      storage={storage}
+    />,
+  );
+}
+
+function scenarioInput(name: string) {
+  return screen.getByLabelText(name) as HTMLInputElement;
 }
 
 function enterProduction(value: string) {
@@ -49,14 +68,14 @@ describe("RevenuePanel", () => {
       "Expected full-season production, kgMS",
     ) as HTMLInputElement;
     expect(input.value).toBe("150000");
-    expect(screen.getByText("NZ$1,425,000")).toBeDefined();
+    expect(screen.getAllByText("NZ$1,425,000").length).toBeGreaterThan(0);
   });
 
   it("compares official and futures revenue at 150,000 kgMS", () => {
     panel();
     enterProduction("150000");
 
-    expect(screen.getByText("NZ$1,425,000")).toBeDefined();
+    expect(screen.getAllByText("NZ$1,425,000").length).toBe(2);
     expect(screen.getByText("NZ$1,481,250")).toBeDefined();
     expect(
       screen.getByText("NZ$56,250 above the official forecast"),
@@ -132,7 +151,7 @@ describe("RevenuePanel", () => {
     panel();
     enterProduction("0");
 
-    expect(screen.getAllByText("NZ$0")).toHaveLength(3);
+    expect(screen.getAllByText("NZ$0")).toHaveLength(6);
   });
 
   it("guides non-numeric input without rendering results", () => {
@@ -159,7 +178,7 @@ describe("RevenuePanel", () => {
     panel({ status: "unavailable", reason: "crossed" });
     enterProduction("150000");
 
-    expect(screen.getByText("NZ$1,425,000")).toBeDefined();
+    expect(screen.getAllByText("NZ$1,425,000").length).toBe(2);
     expect(
       screen.getByText("Futures revenue is unavailable right now."),
     ).toBeDefined();
@@ -175,5 +194,162 @@ describe("RevenuePanel", () => {
     expect(section.textContent).toContain("gross full-season milk revenue");
     expect(section.textContent).toContain("GST");
     expect(section.textContent).toContain("rounded to the nearest dollar");
+  });
+});
+
+describe("scenario prices", () => {
+  it("initialises low, midpoint, and high from the published range", () => {
+    panel();
+
+    expect(scenarioInput("Low price, NZD/kgMS").value).toBe("8.5");
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+    expect(scenarioInput("High price, NZD/kgMS").value).toBe("10.5");
+  });
+
+  it("shows each scenario's revenue at 150,000 kgMS", () => {
+    panel();
+    enterProduction("150000");
+
+    expect(screen.getByText("NZ$1,275,000")).toBeDefined();
+    expect(screen.getByText("NZ$1,575,000")).toBeDefined();
+  });
+
+  it("leaves missing range endpoints blank and editable", () => {
+    panel(okFutures, "2026/27", undefined, {
+      ...official,
+      low: null,
+      high: null,
+      rangeSource: "none",
+    });
+    enterProduction("150000");
+
+    const low = scenarioInput("Low price, NZD/kgMS");
+    expect(low.value).toBe("");
+    expect(screen.queryByText("NZ$1,275,000")).toBeNull();
+
+    fireEvent.change(low, { target: { value: "8.5" } });
+    expect(screen.getByText("NZ$1,275,000")).toBeDefined();
+  });
+
+  it("shows guidance for an invalid scenario price without a revenue", () => {
+    panel();
+    enterProduction("150000");
+
+    fireEvent.change(scenarioInput("Low price, NZD/kgMS"), {
+      target: { value: "8.5.1" },
+    });
+
+    expect(
+      screen.getByText(
+        "Use a plain number with at most three decimal places.",
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText("NZ$1,275,000")).toBeNull();
+  });
+
+  it("keeps user edits across a refresh instead of the official values", async () => {
+    panel();
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+    cleanup();
+
+    panel();
+    await act(async () => {});
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9");
+  });
+
+  it("never lets new source data overwrite edited scenarios", async () => {
+    panel();
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+    cleanup();
+
+    panel(okFutures, "2026/27", undefined, { ...official, midpoint: 9.6 });
+    await act(async () => {});
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9");
+  });
+
+  it("restores the published values and clears storage on reset", async () => {
+    panel();
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reset scenarios to Fonterra's published values",
+      }),
+    );
+
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+    cleanup();
+
+    panel();
+    await act(async () => {});
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+  });
+
+  it("starts a rolled-over season from the official values, not last season's edits", async () => {
+    panel();
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+    cleanup();
+
+    panel(okFutures, "2027/28");
+    await act(async () => {});
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+  });
+
+  it("stays usable when local storage is blocked", () => {
+    const blocked: Storage = {
+      length: 0,
+      clear: () => {},
+      key: () => null,
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    panel(okFutures, "2026/27", blocked);
+
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+    fireEvent.change(scenarioInput("Midpoint price, NZD/kgMS"), {
+      target: { value: "9" },
+    });
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reset scenarios to Fonterra's published values",
+      }),
+    );
+    expect(scenarioInput("Midpoint price, NZD/kgMS").value).toBe("9.5");
+  });
+
+  it("completes the flow with native controls only", () => {
+    panel();
+    enterProduction("150000");
+
+    const production = screen.getByLabelText(
+      "Expected full-season production, kgMS",
+    ) as HTMLInputElement;
+    const example = screen.getByRole("button", {
+      name: "Use 150,000 kgMS as an example",
+    }) as HTMLButtonElement;
+    const reset = screen.getByRole("button", {
+      name: "Reset scenarios to Fonterra's published values",
+    }) as HTMLButtonElement;
+
+    expect(production.disabled).toBe(false);
+    expect(example.disabled).toBe(false);
+    expect(reset.disabled).toBe(false);
+    expect(production.type).toBe("text");
+    expect(scenarioInput("Low price, NZD/kgMS").type).toBe("text");
   });
 });

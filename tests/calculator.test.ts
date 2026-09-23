@@ -3,6 +3,7 @@ import {
   PRICE_STEP,
   formatRevenue,
   grossRevenue,
+  parsePriceInput,
   parseProduction,
   priceSensitivity,
 } from "../lib/calculator";
@@ -11,25 +12,25 @@ describe("parseProduction", () => {
   it("accepts a plain whole kgMS figure", () => {
     expect(parseProduction("150000")).toEqual({
       kind: "valid",
-      production: 150000,
+      value: 150000,
     });
   });
 
   it("accepts zero production as a valid result, not a missing one", () => {
-    expect(parseProduction("0")).toEqual({ kind: "valid", production: 0 });
+    expect(parseProduction("0")).toEqual({ kind: "valid", value: 0 });
   });
 
   it("accepts at most two decimal places", () => {
     expect(parseProduction("150000.5")).toEqual({
       kind: "valid",
-      production: 150000.5,
+      value: 150000.5,
     });
   });
 
   it("treats whitespace-padded input by trimming it", () => {
     expect(parseProduction(" 150000 ")).toEqual({
       kind: "valid",
-      production: 150000,
+      value: 150000,
     });
   });
 
@@ -58,6 +59,19 @@ describe("parseProduction", () => {
     expect(parseProduction("9".repeat(400))).toEqual({
       kind: "invalid",
       reason: "not-a-number",
+    });
+  });
+});
+
+describe("parsePriceInput", () => {
+  it("accepts the three decimals a futures midpoint can carry", () => {
+    expect(parsePriceInput("9.875")).toEqual({ kind: "valid", value: 9.875 });
+  });
+
+  it("rejects more than three decimal places", () => {
+    expect(parsePriceInput("9.8750")).toEqual({
+      kind: "invalid",
+      reason: "too-precise",
     });
   });
 });

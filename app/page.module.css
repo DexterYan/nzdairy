@@ -202,3 +202,49 @@
   border-top: 1px solid #e4dfd3;
   padding-top: 0.75rem;
 }
+
+.scenarioTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.scenarios {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.scenarioRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+}
+
+.scenarioRow label {
+  flex-basis: 12rem;
+  flex-grow: 1;
+}
+
+.scenarioInput {
+  font: inherit;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #d8d2c4;
+  border-radius: 0.375rem;
+  width: 5.5rem;
+}
+
+.scenarioInput:focus-visible {
+  outline: 2px solid #2f5d3f;
+  outline-offset: 2px;
+}
+
+.scenarioRevenue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.scenarioGuidance {
+  font-size: 0.875rem;
+  color: #8a5a00;
+}

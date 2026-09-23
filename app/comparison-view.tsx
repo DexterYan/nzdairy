@@ -42,6 +42,7 @@ export default function ComparisonView({
             <RevenuePanel
               official={snapshot.official}
               futures={snapshot.futures}
+              season={snapshot.season}
             />
           </>
         ) : (

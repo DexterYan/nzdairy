@@ -108,13 +108,13 @@
 **Description:** Populate low, midpoint, and high scenarios from official data while allowing independent edits, per-season local persistence, and reset.
 
 **Acceptance criteria:**
-- [ ] Published low/mid/high values initialise the scenarios without overwriting later user edits.
-- [ ] Missing range endpoints remain blank and editable.
-- [ ] Refresh, reset, season rollover, and unavailable local storage behave predictably.
+- [x] Published low/mid/high values initialise the scenarios without overwriting later user edits.
+- [x] Missing range endpoints remain blank and editable.
+- [x] Refresh, reset, season rollover, and unavailable local storage behave predictably.
 
 **Verification:**
-- [ ] Run scenario, persistence, reset, rollover, missing-range, and blocked-storage tests.
-- [ ] Complete the full calculator flow using only the keyboard.
+- [x] Run scenario, persistence, reset, rollover, missing-range, and blocked-storage tests.
+- [x] Complete the full calculator flow using only the keyboard.
 
 **Dependencies:** Task 5
 
