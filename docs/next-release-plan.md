@@ -1,7 +1,8 @@
 # MilkCompass next release: market changes and farm impact
 
 Status: proposed implementation plan. Written 2026-09-24 against `main`
-(`4084804`). This document plans work; it does not authorise purchases, provider
+(`4084804`); revised after a `claude -p` review on the same date.
+[Review decisions](next-release-review.md) record the changes. This document plans work; it does not authorise purchases, provider
 outreach, or public deployment.
 
 ## Outcome
@@ -27,7 +28,9 @@ readiness must still be verified separately from the presence of code.
 The first-release plan and design-extension spec remain the contracts for existing
 behaviour. This proposal adds history and market context in a subsequent release;
 it does not retroactively change their acceptance criteria. Implementation should
-update the relevant design and engineering contracts before changing those areas.
+write `docs/next-release-design.md` before changing presentation. This plan is the
+next-release engineering contract once approved; `SPEC.md` remains the completed
+design-extension contract and is not expanded to cover collector changes.
 Tasks 1–12 and their outstanding launch checks remain intact.
 
 **Core release:** permitted source adapters, auditable observations, current-season
@@ -63,54 +66,145 @@ No fees or provider SLAs are assumed in this plan.
 Keep the two-Worker architecture and R2. Isolate source adapters from parsing and
 presentation. Network requests occur in the collector, not in browser components.
 
-- Define an additive, versioned observation/history contract with series ID,
-  season/contract or reporting period, value/unit/currency, quote basis, source
-  observation/publication/retrieval times, provider and parser version, and revision
-  identity. Record bid/offer, volumes and open interest when supplied.
-- Archive raw responses where permitted, with content hashes and parser versions,
-  before publishing validated data. Apply provider-specific retention rules; never
-  archive credentials. Existing archives contain parsed results, not raw evidence.
-- Deduplicate repeated source observations. A successful refetch or retained value
-  is not a new market observation. Preserve revisions without silently rewriting
-  previously published evidence.
-- Materialise a bounded current-season history object; the page must not list or
-  scan the archive. Publish immutable history versions before updating a manifest
-  that references the matching latest snapshot and history. Preserve the existing
-  reader path until migration is tested; a partial write cannot publish mixed versions.
-- Keep current-season contract matching and all existing missing-value, freshness
-  and retention rules. History failure must leave the current comparison usable.
-- Start with daily collection. Context freshness follows each source's publication
-  cadence; monthly collections must not inherit the futures 72-hour threshold.
+### Compatibility and publication
 
-### Comparable changes
+`readLatestSnapshot` accepts only schemaVersion 1 and drops unknown fields. Keep
+`latest.json` in its existing v1 shape, including existing optional fields. Store
+new contracts under separate keys and read them with a new release loader. Never
+expect new fields to survive the old parser or bump the legacy object's version.
 
-For “since last week,” use the latest valid observation at or before seven calendar
-days before the current observation, with at most seven further calendar days of
-lookback. Show both actual dates; outside that window show insufficient history.
-This is a display policy, not a trading-calendar assertion.
+The collector writes immutable `releases/{season}/{runId}/snapshot.json` (v1) and
+`history.json`, then publishes `current-release.json` with matching object keys,
+season, schema version and the previous successful release descriptor. Only after
+that commit does it update the legacy `latest.json` compatibility mirror. A mirror
+failure is logged and retried; old readers may lag but retain a valid v1 snapshot.
+Readers never combine a manifest snapshot with an independently read legacy history.
 
-For “since Fonterra's announcement,” compare the current MKP reference with the last
-eligible observation at or before that announcement. If only a publication date is
-known, use the prior Auckland calendar day's cutoff to avoid using post-announcement
-data. Apply the same seven-day lookback tolerance and expose the baseline date.
+The release loader in `lib/release.ts`, wired through `app/page.tsx`, follows these
+rules with bounded reads:
 
-Only calculate deltas for matching series, contract, currency, unit and quote basis.
-A midpoint-to-last-trade or settlement transition displays “basis changed”; it must
-not produce an apparent market movement. Keep Fonterra forecast revisions separate
-from futures movements. Split chart segments at basis transitions and missing or
-stale intervals. Repeated carried-forward prices cannot imply fresh trading.
+- No manifest: use the legacy snapshot and show history unavailable.
+- Valid snapshot but missing/corrupt/mismatched history: show that snapshot with
+  history unavailable. Do not discard valid current prices because history failed.
+- Invalid/missing snapshot: try the manifest's previous release, then the legacy
+  snapshot without history. If the manifest itself is invalid, use the legacy path.
+- Validate every descriptor, version and season. Fallback data retains its timestamps
+  and failure status; no prior-season data is substituted on June 1.
 
-The official forecast is a step series of announcements; the published low/high
-range is not a probability band. Current warnings stay visible alongside history.
-Backfill only verifiable observations from permitted sources; never manufacture
-daily history from today's forecast or duplicate archives.
+Use one scheduled writer. Retries reuse the run ID and are idempotent. Implement a
+conditional manifest update against the version read at run start; on conflict,
+re-read and rebuild from committed history rather than losing another run's data.
+Verify the storage API's conditional-write semantics in Task 14 before implementation.
+An older scheduled run must not replace a newer run. This prevents overlap between
+cron, retries and operational runs without assuming storage writes are transactional.
+
+Archive permitted raw evidence with a hash and parser version before publication;
+never archive credentials. Record each source's retention duration and implement
+and test expiry cleanup (or documented unlimited retention). If raw retention is
+not permitted, preserve allowed parsed provenance and declare replay unavailable;
+raw replay is not a universal release gate. History materialisation is bounded to
+one season, with a budget fixed in Task 14; the page never scans archive keys.
+
+### Observation identity and history coverage
+
+Store series/provider, season/contract or reporting period, value/unit/currency,
+basis, source-effective time and precision, publication/retrieval times, parser
+version and revision identity. Keep check outcomes separate from observations.
+
+Observation identity is `(series, provider, contract/period, basis, source-effective
+instant-or-date)`. Identical canonical price payloads for that identity deduplicate;
+a changed payload creates an immutable revision. Same price at a genuinely new
+source-effective time is a new observation; a newer retrieval/check alone is not.
+Activity-only row changes must not refresh a last trade or settlement's price time.
+Use the latest known revision in the display and retain earlier versions for audit;
+this release does not claim an as-known-at-the-time backtest.
+
+| Basis | Historical price time |
+|---|---|
+| Bid/offer midpoint | Provider-verified quote time; a row-update time is eligible only if its price-observation meaning is documented. |
+| Last trade | Actual trade time/date, never the row-update time. |
+| Prior settlement | Verified settlement session/date; missing session identity makes it ineligible for history. |
+| Official forecast | Dated, explicitly season-labelled price announcement; no-change notices are events, not new prices. |
+
+A value that cannot support historical identity may remain in the existing v1
+comparison under its existing rules, with history unavailable. Do not silently
+reinterpret the current parser's `quotedAt` as a trade or settlement time.
+
+Extend `lib/fonterra.ts` to expose validated current-season priced announcement rows
+already present in the source table. Test each row, range and footnote independently;
+never apply today's range to old announcements. Preserve unreadable rows as gaps and
+the existing latest-forecast failure rules. No-change notices do not reset the
+since-announcement baseline. Historical rows discovered today retain their announced
+and first-seen dates. Backfill MKP only from verifiable, permitted observations;
+otherwise show the actual collection coverage. Retained blocks create no new prices.
+
+### Comparable changes and time rules
+
+All calendar arithmetic resolves in `Pacific/Auckland`, including daylight-saving
+boundaries. Date-only observations denote the entire Auckland day, not midnight UTC.
+A date-only baseline is eligible only when the entire interval ends at/before the
+cutoff; never shift an observation to an earlier day to make it eligible. Ambiguous
+source timestamps must remain ineligible until the adapter establishes their meaning.
+
+For “since last week,” anchor to the latest eligible MKP observation (not retrieval
+or today's date) and subtract seven Auckland calendar days. If the endpoint is
+date-only, anchor the cutoff at the start of its day minus seven days. Select the
+latest eligible observation at/before that cutoff, no more than seven calendar days
+further back. Show actual endpoint/baseline dates; outside the window show insufficient
+history. For “since Fonterra's announcement,” use the latest priced announcement's
+instant, or start of its Auckland day if date-only, as the cutoff with the same
+lookback tolerance. Same-day observations of unknown time cannot precede that cutoff.
+
+First select the nearest eligible temporal baseline; then require matching series,
+provider, contract, currency, unit and basis. Do not search farther back merely to
+hide a basis/provider transition. An intervening basis/provider change also suppresses
+the delta, even if endpoint bases match. Show “basis changed” or “source changed.”
+Keep official forecast revisions separate from futures movements.
+
+Historical eligibility is distinct from request-time freshness:
+
+- A baseline does not become ineligible merely because it is now over 72 hours old.
+  Verified historical backfills can qualify even when first retrieved much later.
+- A carried-forward block is not a new observation. A genuine verified old trade may
+  remain historical evidence, but a new row timestamp cannot make it a fresh endpoint.
+- Current quote/check warnings still use the existing 72/36-hour display rules at
+  request time. Suppress fresh-change summaries and revenue deltas while the current
+  check failed/was retained, the check is stale, or the effective endpoint is over
+  72 hours old. Date-only endpoint age uses the start of its day conservatively.
+- Plot historic verified observations as dated points; break futures lines across
+  basis/provider changes, failed-check intervals or effective-time gaps over 72 hours.
+  These visual gaps do not alone invalidate otherwise comparable historical endpoints.
+  Forecast steps remain valid between announcements; the forecast range is not a
+  probability band. Never draw carried-forward values as fresh trading points.
+
+On June 1, initialise the new season history from only validated new-season data;
+it may be empty or contain new-season announcements, never prior-season carry-forward.
+Retain old immutable objects for their permitted retention period. Dates before June 1
+may legitimately belong to a new-season official opening announcement.
+
+### Context contract
+
+Context uses a separate, optional versioned object and loader; failure never blocks
+core publication. The reader verifies each card independently. Each card carries
+its own source, period, native unit, last successful check, current failed-check
+status, `nextExpectedAt` and source-specific grace interval. Its freshness is based
+on overdue publication (`now > nextExpectedAt + grace`) plus independent failed/stale
+check indicators, not the futures 72-hour quote rule.
+
+Task 14 defines the shape; Tasks 19–21 must record an exact expected-publication
+schedule and numeric grace interval from observed/provider cadence before that card
+can claim to be up to date. Test the threshold boundaries. If no reliable schedule is available,
+show dated observations with “publication schedule unknown,” never “up to date.”
+Do not invent a universal 40-day threshold for monthly reports.
 
 ### Farmer-facing presentation
 
 Preserve the current comparison and calculator. Add, in order:
 
 1. A dated change summary and farm-revenue sensitivity using the existing production
-   input. Blank/invalid production shows guidance; genuine zero remains zero.
+   input. Keep raw production state in `RevenuePanel` and pass validated deltas into
+   it; mount the sensitivity there rather than introduce a second state owner.
+   Blank/invalid production shows guidance; genuine zero remains zero.
 2. A compact current-season history chart with a text/table equivalent, distinguishable
    forecast and futures series, and visible gaps. Prefer native SVG and existing CSS.
 3. Plain-language quote evidence: age, basis, spread and available activity. Avoid an
@@ -122,46 +216,56 @@ Context stays in native units. WMP/SMP USD/tonne, NZD/USD and collection volumes
 not converted directly into NZD/kgMS forecasts. Revenue sensitivity excludes GST,
 costs, dividends, premiums, deductions and payment timing, as in the existing product.
 
+Preview/source labels must reflect fixture versus collected data. Carry provenance
+through the release loader; replace the hardcoded frozen-fixture footer during reader
+migration, while preserving explicit delayed-data language.
+
 ## Delivery sequence
 
-Executable criteria are appended as Tasks 13–22 in [`tasks/todo.md`](../tasks/todo.md).
+Tasks 13–22 (with focused sub-tasks) are in [`tasks/todo.md`](../tasks/todo.md).
 
 ```text
-13 Source/access decision
-  -> 14 Observation/history contract
-      -> 15 Auditable publication
-          -> 16 Historical changes
-              -> 17 Farm-impact history UI
-                  -> 18 Quote-quality presentation
-                      -> Core checkpoint
-                          -> 19 FX context
-                              -> 20 Milk-collection context
-                                  -> 21 GDT context (conditional)
-                                      -> 22 Integrated release verification
+13a Field/access requirements -> 14 Contracts
+13b Next-release design -------------------------> 17a Impact UI -> 17b Chart
+13c Provider selection/access -> production source use only
+14 -> 15a Forecast history -> 15b Publication -> 15c Web reader
+14 -> 16 Comparable changes ---------------------> 17a (also needs 15c)
+13b -> 18 Quote evidence; integrates with 17b at core checkpoint
+Core checkpoint -> optional 19 FX / 20 Collections / 21 GDT -> 22 Release
 ```
 
-Fixture work may proceed after the source requirements are documented, while
-commercial access remains unresolved. Production ingestion and public display wait
-for the relevant rights evidence. Task 22 may omit explicitly deferred context
-sources, but cannot waive core data rights or validation.
+Provider selection runs independently of fixture work and requires separate authority
+for any purchase or outreach. Context slices do not depend on each other; implement
+shared collector/component edits sequentially. Each may be explicitly deferred.
 
 ## Verification and release gates
 
-- Per slice: focused logic/component tests for its acceptance criteria, then
-  `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`.
-- Checkpoints after Tasks 15, 18 and 21: verify publication recovery, the core farmer
-  journey, and independent context degradation respectively.
-- Final gate: add `npm run build:worker` and `npm run test:e2e`; inspect 375px and
-  desktop, keyboard access, text alternatives, reduced motion and long labels.
-- Exercise missing history, basis transitions, publication-date ambiguity, revision
-  handling, repeated observations, partial writes, season rollover and unavailable
-  context. Test real-provider integration separately from deterministic fixtures.
-- Observe at least seven consecutive scheduled production-eligible collection runs
-  in a restricted environment. Confirm freshness, parser failure visibility and
-  restoration of the previous manifest. A quiet market need not produce seven prices.
-- Public launch requires documented entitlements for every exposed dataset and the
-  existing deployment gate. Restrict or omit unlicensed context. Roll back the
-  publication manifest or application independently without deleting evidence.
+- Per slice: focused tests, `npm run typecheck`, `npm run lint`, `npm test`, and
+  `npm run build`. Contract/publication/reader/fixture changes additionally run
+  `npm run build:worker` and `npm run test:e2e` in that slice, with seed and degraded
+  fixtures updated alongside it. The existing e2e script tests SSR/HTTP, not browser
+  interaction; it cannot certify slider/typing or chart keyboard behaviour.
+- Checkpoints follow publication/read migration (15c), the complete core journey
+  (17b + 18), and whichever context slices are included. Test old and new publication
+  layouts, missing/corrupt references, compatibility-mirror failure, competing runs,
+  rollover, raw-retention cleanup and rollback while keeping valid prices usable.
+- Task 16 tests same-price/new-time versus refetch, historical backfill age, genuinely
+  old current endpoints, date-only trades, no-change announcements, basis transitions
+  including A→B→A, provider transitions, exact cutoffs and Auckland DST.
+- Tasks 17a/17b test weekly and since-announcement deltas reaching the existing production
+  input, overflow/invalid/zero cases, missing history, chart gaps and text alternatives.
+  Record actual browser checks at 375px and desktop for keyboard, typing/slider,
+  hydration, long labels and reduced motion; automated SSR checks are separate evidence.
+- Start seven consecutive restricted scheduled-run observations after Task 15b, once
+  collection access is permitted and that environment is provisioned. Task 22 records
+  evidence rather than starting the wait. Collection/publication contract changes
+  restart this run; UI-only changes do not. Context feeds require their own successful
+  source validation and failure/recovery checks, without extending the core soak.
+- Final gate reruns all six commands and records the browser journey and rollback.
+  Public launch requires documented rights for every exposed dataset and existing
+  first-release approval/deployment gates. Publication rollback is season-scoped and
+  preserves evidence; old application rollback reads the tested v1 mirror. Mirror
+  failure may leave older data, which must keep its original freshness warnings.
 
 ## Risks and decisions to close
 

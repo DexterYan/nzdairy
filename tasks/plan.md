@@ -47,20 +47,24 @@ sessions; Task 12 shares `revenue-panel.tsx` with Task 11 and follows it.
 
 ## Next Release: Market Changes and Farm Impact
 
-The proposed scope, data decisions and quality rules are in
-[`docs/next-release-plan.md`](../docs/next-release-plan.md). Tasks 13–22 in
-[`tasks/todo.md`](todo.md) extend the existing checklist without replacing prior
-release gates.
+The engineering plan is [docs/next-release-plan.md](../docs/next-release-plan.md).
+[Claude review decisions](../docs/next-release-review.md) explain the revised Tasks
+13–22 in [tasks/todo.md](todo.md); existing release gates remain intact.
 
 ```text
-Source/access decision (13) -> Observation contract (14)
-  -> Auditable publication (15) -> Historical changes (16)
-  -> Farm-impact history UI (17) -> Quote evidence (18)
-  -> FX context (19) -> Milk collections (20) -> Conditional GDT context (21)
-  -> Integrated release verification (22)
+13a Requirements -> 14 Contracts -> 15a Forecast history -> 15b Publication
+                                                        -> 15c Web reader
+14 -> 16 Comparable changes -------------------------------> 17a Impact UI
+15c Web reader --------------------------------------------> 17a
+13b Next-release design -----------------------------------> 17a -> 17b Chart
+13b -> 18 Quote evidence ----------------------------------> Core checkpoint
+13c Provider selection -> production access only
+Core checkpoint -> independent optional 19 / 20 / 21 -> 22 Release
 ```
 
-Checkpoints follow Tasks 15, 18 and 21. Fixture implementation can proceed while
-rights are unresolved; production use cannot. Unavailable context sources may be
-explicitly deferred without blocking the core release. Current-season history is
-the proposed scope extension; proprietary forecasting remains deferred.
+Fixture work depends on documented requirements, not commercial provider selection.
+Keep latest.json v1 compatible; explicitly migrate app/page.tsx to the new loader.
+Start restricted scheduled-run evidence after 15b when access/environment permit.
+Quote evidence can be implemented ahead of history; coordinate shared-file edits.
+Context cards have no dependencies on each other; each may be explicitly deferred.
+Checkpoints cover publication/read migration, the core journey, and included context.

@@ -278,201 +278,296 @@ Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md
 
 # Next Release: Market Changes and Farm Impact
 
-Proposed work from [the next-release plan](../docs/next-release-plan.md). Existing
-unchecked launch items remain in force. The slice gate is `npm run typecheck`,
-`npm run lint`, `npm test`, and `npm run build`; add focused tests described below.
+Revised after the [Claude review](../docs/next-release-review.md); governed by
+[the next-release plan](../docs/next-release-plan.md). Prior unchecked launch items
+remain in force. IDs 13, 15 and 17 are split into focused sub-tasks.
 
-## Task 13: Document source access and select the core feed
+The slice gate is `npm run typecheck`, `npm run lint`, `npm test`, and
+`npm run build`. The full gate additionally runs `npm run build:worker` and
+`npm run test:e2e`. Any snapshot/collector/reader/fixture change runs the full gate
+in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 
-**Description:** Compare the current source path with supported SGX/NZX or vendor feeds; record the chosen acquisition route before production integration.
+## Task 13a: Document source requirements
 
-**Acceptance criteria:**
-- [ ] Document exact MKP contract/fields, delay, history, costs and intended display/derived-output entitlements; unresolved rights remain explicitly blocked.
-- [ ] Record per-source access, retention and fallback decisions; vendor API access alone never counts as redistribution permission.
-- [ ] Update the next-release design/engineering scope and correct the README baseline without claiming production readiness.
-
-**Verification:**
-- [ ] Review source documents and the field/entitlement matrix; verify existing deployment restrictions remain enabled.
-
-**Dependencies:** None; preserve outstanding first-release launch gates.
-
-**Files likely touched:** `docs/data-rights.md`, `docs/next-release-plan.md`, `docs/design.md`, `SPEC.md`, `README.md`
-
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
-
-## Task 14: Define versioned observation and history contracts
-
-**Description:** Specify comparable observations and publication manifests while keeping existing latest-snapshot readers compatible.
+**Description:** Define fixture-testable field and access requirements without waiting for provider selection.
 
 **Acceptance criteria:**
-- [ ] Represent source identity, season/contract/period, units, basis, timestamps, revisions and parser provenance.
-- [ ] Define bounded current-season history, observation deduplication and manifest versioning; retained values are not fresh observations.
-- [ ] Reject incompatible records and specify migration/rollback for existing snapshots.
+- [ ] Document required MKP fields, effective-time semantics, history needs and unresolved access/display/retention rights; this task can finish with provider choice pending.
+- [ ] Distinguish current local collection from future production access; do not claim the existing collector is fixture-only.
+- [ ] Correct the README baseline and link the next-release engineering contract without expanding the completed design-extension SPEC.md.
 
 **Verification:**
-- [ ] Contract tests cover old snapshots, malformed records, revisions, repeated retrievals and wrong-season observations; run the slice gate.
+- [ ] Review the requirements matrix against existing parser fields and confirm public deployment flags remain disabled.
 
-**Dependencies:** 13; fixture implementation does not require a purchased feed.
+**Dependencies:** None.
 
-**Files likely touched:** `lib/snapshot.ts`, `lib/history.ts` (new), `tests/history.test.ts` (new), `docs/operations.md`
+**Files likely touched:** `docs/data-rights.md`, `docs/next-release-plan.md`, `README.md`
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Small.
 
-## Task 15: Publish auditable observations and history
+## Task 13b: Specify the next-release presentation
 
-**Description:** Connect the selected source adapter and publish coherent latest/history versions through the collector.
+**Description:** Write a separate design extension for history, impact and independent context states.
 
 **Acceptance criteria:**
-- [ ] Archive permitted raw evidence with hashes and parser versions; preserve parsed observations and provider retention restrictions.
-- [ ] Write immutable history/latest objects before advancing the manifest; failed writes leave the prior published version readable.
-- [ ] Deduplicate observations, preserve revisions, expose collection failures and document scheduled-run recovery.
+- [ ] Create docs/next-release-design.md with layout, SVG/text-table behaviour and empty, stale, basis-changed, source-changed and deferred-context states.
+- [ ] Keep production state in RevenuePanel; pass validated changes into it and preserve scenarios, validation and local persistence.
+- [ ] Specify fixture/collected provenance labels and source-specific freshness presentation; preserve existing tokens and accessible controls.
 
 **Verification:**
-- [ ] Collector integration tests inject source and storage failures at each publication stage; verify prior-manifest recovery and run the slice gate.
+- [ ] Review the design against docs/design.md and this release contract, including 375px layout and text alternatives.
 
-**Dependencies:** 14; actual provider use also requires the access decision in 13 to be resolved.
+**Dependencies:** None; align with 13a before contract freeze.
 
-**Files likely touched:** `workers/collection/index.ts`, `workers/collection/fetch-source.ts`, `lib/snapshot.ts`, collector tests, `docs/operations.md`
+**Files likely touched:** `docs/next-release-design.md` (new), `docs/next-release-plan.md`
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Small.
 
-## Checkpoint: History publication
+## Task 13c: Select and enable the production feed
 
-- [ ] Prior manifest survives partial publication failures; archived evidence can reproduce a parsed observation.
-- [ ] Contract and collector tests pass; rights restrictions remain enforced.
+**Description:** Resolve the commercial/access decision separately from implementation using fixtures.
+
+**Acceptance criteria:**
+- [ ] Record selected source, exact contract coverage, timestamp meanings, cost, retention and public-display/derived-output entitlements.
+- [ ] Document unresolved limitations and fallback; no new provider production use without access evidence, no public display without display rights.
+- [ ] Obtain separate authority for purchases or outreach; a pending decision does not block Tasks 14–18 using fixtures.
+
+**Verification:**
+- [ ] Review written entitlement evidence and sample data against 13a; leave this task open if access remains unresolved.
+
+**Dependencies:** 13a; external decisions may remain pending.
+
+**Files likely touched:** `docs/data-rights.md`, `docs/operations.md`
+
+**Estimated scope:** Small, externally dependent.
+
+## Task 14: Define separate release, history and context contracts
+
+**Description:** Keep the legacy v1 snapshot intact and specify versioned companion objects and comparison inputs.
+
+**Acceptance criteria:**
+- [ ] Define manifest/history/context types, effective-time precision, identity/revision rules, bounded size budgets and the release-loader fallback contract from the plan.
+- [ ] Preserve legacy latest.json v1 semantics; specify immutable keys, previous-release descriptor, idempotent run IDs, conditional manifest update and provider-specific provenance/retention.
+- [ ] Test same-price/new-effective-time, identical refetch, revised payload, activity-only row updates, undated settlement exclusion, date-only intervals and no-change announcements.
+
+**Verification:**
+- [ ] Run contract and v1-reader compatibility tests; verify conditional-write API semantics; add representative companion fixtures and run the full gate.
+
+**Dependencies:** 13a only; no dependency on completed 13c.
+
+**Files likely touched:** `lib/history.ts` (new), `lib/release.ts` (new), `tests/history.test.ts` (new), `tests/release.test.ts` (new), companion fixtures
+
+**Estimated scope:** Medium.
+
+## Task 15a: Extract verified official forecast history
+
+**Description:** Expose current-season priced rows already present in the Fonterra table.
+
+**Acceptance criteria:**
+- [ ] Validate each historical row, range and footnote; retain published and first-seen dates and show unreadable rows as gaps.
+- [ ] Preserve current latest-forecast fail-closed behaviour; no-change notices remain events and do not reset the priced-announcement baseline.
+- [ ] Accept explicitly labelled new-season opening announcements before June 1 without importing the prior season.
+
+**Verification:**
+- [ ] Fixture tests cover multiple rows, incorrect ranges, unreadable earlier/latest rows, no-change notices and pre-June openings; run the slice gate.
+
+**Dependencies:** 14.
+
+**Files likely touched:** `lib/fonterra.ts`, `tests/fonterra.test.ts`, Fonterra history fixtures
+
+**Estimated scope:** Medium.
+
+## Task 15b: Publish coherent releases and a v1 compatibility mirror
+
+**Description:** Write validated observations, immutable release objects and a manifest while retaining the old reader path.
+
+**Acceptance criteria:**
+- [ ] Commit immutable snapshot/history before conditional manifest update, then update latest.json as a v1 mirror; test conflicts, retry idempotency, older-run rejection and mirror failures.
+- [ ] Deduplicate/refine observations, archive only permitted evidence, implement documented expiry cleanup and record replay limits when raw retention is prohibited.
+- [ ] Test scheduled Auckland rollover with May 31 2027 (2026/27) and June 1 2027 (2027/28): only new-season observations enter the new history and old objects remain unchanged.
+
+**Verification:**
+- [ ] Inject failures at every write and conflicting runs; update fixture seeding/SSR tests in the same slice and run the full gate. Start restricted scheduled-run observation once access/environment permit.
+
+**Dependencies:** 14 and 15a; production provider use also requires 13c.
+
+**Files likely touched:** `workers/collection/index.ts`, `workers/collection/publish.ts` (new), `tests/collector.test.ts`, `scripts/e2e.mjs`, publication fixtures
+
+**Estimated scope:** Medium; implement any replacement provider adapter as its own field-mapped slice before production use.
+
+## Task 15c: Wire the web release reader and provenance
+
+**Description:** Migrate the page to a manifest-aware reader without making valid current prices depend on history availability.
+
+**Acceptance criteria:**
+- [ ] Wire app/page.tsx to lib/release.ts: no manifest uses legacy; bad history preserves valid manifest prices; bad snapshot tries previous release then legacy without history.
+- [ ] Validate matching season/version/object relationships and bounded fallback reads; do not mix versions or fall back to prior-season prices.
+- [ ] Replace the hardcoded frozen-fixture footer with actual fixture/collected provenance and delayed-data wording; legacy provenance defaults to unknown, never guessed live.
+
+**Verification:**
+- [ ] Test bootstrap, corrupt/missing manifest/snapshot/history, stale mirror and wrong-season fallback; update SSR fixtures and run the full gate.
+
+**Dependencies:** 15b.
+
+**Files likely touched:** `lib/release.ts`, `tests/release.test.ts`, `app/page.tsx`, `app/comparison-view.tsx`, `scripts/e2e.mjs`
+
+**Estimated scope:** Medium.
+
+## Checkpoint: Publication and reader migration
+
+- [ ] Old v1 and new release readers work through bootstrap, corruption, write conflicts, mirror failure and Auckland rollover.
+- [ ] Restricted scheduled-run evidence has started when access permits; raw-retention rules and replay limits are recorded.
 
 ## Task 16: Calculate comparable historical changes
 
-**Description:** Build deterministic weekly and since-announcement comparisons using the documented baseline rules.
+**Description:** Implement weekly and since-priced-announcement rules as pure functions.
 
 **Acceptance criteria:**
-- [ ] Use actual baseline dates and the seven-day lookback tolerance; missing history produces guidance, never zero.
-- [ ] Suppress deltas across quote-basis, contract, unit or currency changes; respect date-only announcement cutoffs in Auckland.
-- [ ] Keep official revisions separate from futures changes and exclude retained/stale observations from fresh-movement claims.
+- [ ] Use Auckland calendar arithmetic, interval-aware date-only cutoffs, inclusive lookback bounds and actual displayed endpoint dates.
+- [ ] Select nearest temporal baseline before comparison; suppress basis/provider transitions including A→B→A and reject mismatched contract/unit/currency.
+- [ ] Allow verified old historical baselines/backfills, but suppress fresh summaries for failed/retained/stale current checks or old effective endpoints; no-change notices do not reset the baseline.
 
 **Verification:**
-- [ ] Table-driven tests cover cutoff boundaries, DST, sparse history, basis changes, revisions and season rollover; run the slice gate.
+- [ ] Test DST boundaries, date-only last trades, exact cutoffs, insufficient history, backfilled baselines, >72-hour endpoints and transitions; run the slice gate.
 
-**Dependencies:** 15.
+**Dependencies:** 14; can precede publication integration using fixtures.
 
-**Files likely touched:** `lib/history.ts`, `lib/changes.ts` (new), `tests/changes.test.ts` (new)
+**Files likely touched:** `lib/changes.ts` (new), `tests/changes.test.ts` (new), comparison fixtures
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Medium.
 
-## Task 17: Show history and farm-revenue sensitivity
+## Task 17a: Connect historical changes to farm-revenue sensitivity
 
-**Description:** Add the dated change summary and compact history view to the existing production-input journey.
+**Description:** Add dated movement summaries using the existing production state owner.
 
 **Acceptance criteria:**
-- [ ] At 150,000 kgMS, a comparable $0.20/kgMS change yields NZ$30,000 gross full-season sensitivity; invalid input shows guidance and zero production remains valid.
-- [ ] Provide forecast steps, futures observations, visible gaps/basis transitions and a text/table equivalent without a charting dependency.
-- [ ] Preserve current warnings, scenarios and exclusions; missing history leaves the current comparison usable.
+- [ ] Pass release/history inputs through ComparisonView and validated deltas into RevenuePanel without duplicating raw production state.
+- [ ] At 150,000 kgMS a $0.20/kgMS delta yields NZ$30,000; cover negative changes, invalid/blank/zero production, overflow and rounded-zero wording.
+- [ ] Unavailable/incomparable history shows guidance while current values, saved scenarios and exclusions remain intact.
 
 **Verification:**
-- [ ] Component tests cover calculations and degraded history; verify 375px/desktop, keyboard access and text alternatives; run the slice gate.
+- [ ] Component tests exercise typing and slider updates across both summary periods, degraded history and unchanged scenarios; run the slice gate and SSR degraded scenarios.
 
-**Dependencies:** 16 and the updated design contract from 13.
+**Dependencies:** 13b, 15c and 16.
 
-**Files likely touched:** `app/comparison-view.tsx`, `app/history-panel.tsx` (new), `app/revenue-panel.tsx`, `app/page.module.css`, history component tests
+**Files likely touched:** `app/comparison-view.tsx`, `app/revenue-panel.tsx`, `app/revenue-panel.test.tsx`, `app/page.module.css`, `scripts/e2e.mjs`
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Medium.
+
+## Task 17b: Render accessible current-season history
+
+**Description:** Add the chart and its equivalent dated table after the impact flow works.
+
+**Acceptance criteria:**
+- [ ] Render forecast announcement steps and verified futures points with native SVG; break lines at basis/provider changes, failed checks and gaps over 72 hours.
+- [ ] Provide a text/table equivalent with provenance, actual coverage dates and missing-history guidance; no fabricated daily forecast or trading observations.
+- [ ] Meet the approved next-release design at 375px/desktop, including keyboard access, long labels, reduced motion and forecast-range labelling.
+
+**Verification:**
+- [ ] Chart component tests cover gaps/revisions/transitions and text equivalence; run the slice gate and record real-browser keyboard/mobile checks separately from SSR tests.
+
+**Dependencies:** 17a and 13b.
+
+**Files likely touched:** `app/history-panel.tsx` (new), `app/history-panel.test.tsx` (new), `app/comparison-view.tsx`, `app/page.module.css`
+
+**Estimated scope:** Medium.
 
 ## Task 18: Explain quote quality beside the reference
 
-**Description:** Make the existing basis, spread, age and activity evidence understandable alongside the new changes.
+**Description:** Improve existing quote evidence independently of history implementation.
 
 **Acceptance criteria:**
-- [ ] Display available bid/offer spread, timestamps and trading activity without an invented confidence score.
-- [ ] Unknown volume remains unknown; old, retained and basis-changed states remain explicit and never imply an executable price.
-- [ ] Evidence remains accessible on small screens and survives unavailable-history states.
+- [ ] Display available spread, basis, quote/trade timestamps and activity without invented confidence or executable-price claims.
+- [ ] Unknown volume remains unknown; old and retained states remain explicit and age at request time.
+- [ ] Preserve existing source details and inspect combined history-unavailable and basis/source-change presentation at the core checkpoint.
 
 **Verification:**
-- [ ] Component tests cover missing activity, wide spreads, old quotes and retained data; inspect mobile and run the slice gate.
+- [ ] Component tests cover missing activity, old/retained quotes and spread; run the slice gate and inspect mobile labels.
 
-**Dependencies:** 17.
+**Dependencies:** 13b; can precede 16/17, but coordinate edits to ComparisonView.
 
 **Files likely touched:** `app/comparison-view.tsx`, `app/page.module.css`, `app/page.test.tsx`
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Small.
 
 ## Checkpoint: Core farmer journey
 
-- [ ] Comparable movement flows from history through the production input to labelled gross revenue sensitivity.
-- [ ] Mobile, keyboard and unavailable-history journeys pass; no basis transition creates a false change.
+- [ ] 15c, 16, 17a, 17b and 18 are complete regardless of implementation order.
+- [ ] Comparable changes drive the existing production input; mobile, keyboard, missing history and quote-quality states pass.
 
 ## Task 19: Add dated NZD/USD context
 
-**Description:** Deliver the first independent context card from collection through presentation.
+**Description:** Deliver an optional independent FX card through the shared context contract.
 
 **Acceptance criteria:**
-- [ ] Use a permitted source with explicit currency direction, observation time and daily publication cadence.
-- [ ] Expose missing/stale FX independently; no conversion into a farmgate forecast or suppression of the core comparison.
-- [ ] Show a source-linked factual change summary only when comparable observations exist.
+- [ ] Use a permitted source with currency direction and effective time; set exact nextExpectedAt/grace rules or explicitly show schedule unknown.
+- [ ] Publish/read the separate context object without blocking core release publication; expose overdue, failed-check and missing-data states independently.
+- [ ] Show a source-linked factual comparable change only; never convert it directly into a farmgate forecast.
 
 **Verification:**
-- [ ] Fixture parser and component tests cover direction, missing values, dates and independent failure; run the slice gate.
+- [ ] Parser/component tests cover direction, exact freshness boundaries and independent failure; wire fixtures and run the full gate for collector/reader changes.
 
-**Dependencies:** 18; FX access/reuse resolved in 13, otherwise explicitly defer.
+**Dependencies:** 14, 15c, 13b and source rights; no dependency on 20/21.
 
-**Files likely touched:** `lib/fx.ts` (new), `workers/collection/index.ts`, `app/market-context.tsx` (new), FX parser tests, context component tests
+**Files likely touched:** `lib/fx.ts` (new), shared context loader/publisher, `app/market-context.tsx` (new), FX/context tests, fixtures
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Medium; deliver shared context wiring as a separate slice if first enabled source exceeds five files.
 
 ## Task 20: Add monthly milk-collection context
 
-**Description:** Show Fonterra NZ collection volumes and comparable period changes with accurate coverage labels.
+**Description:** Deliver an optional Fonterra NZ collection card independent of FX and GDT.
 
 **Acceptance criteria:**
-- [ ] Label the dataset as Fonterra NZ collections, not all NZ production; retain reporting period and native unit.
-- [ ] Compare like periods, preserve revisions and use monthly publication-aware freshness.
-- [ ] Missing collections leave FX and core comparison usable; summary describes observed changes without causal claims.
+- [ ] Label Fonterra NZ coverage, period and native unit; compare like periods and preserve revisions.
+- [ ] Document exact publication expectations and numeric grace before claiming up-to-date status, or show schedule unknown; test boundary dates.
+- [ ] Use the independent context contract; missing collections never suppress other cards or core prices and summaries do not claim causation.
 
 **Verification:**
-- [ ] Fixture tests cover period matching, revisions, unit handling and missing reports; component tests verify labels; run the slice gate.
+- [ ] Parser/component tests cover period matching, revisions, units, publication lag and isolated failure; run the full gate for collector/reader changes.
 
-**Dependencies:** 19 or its explicit deferral; collection-source access/reuse resolved.
+**Dependencies:** 14, 15c, 13b and source rights; no dependency on 19/21.
 
-**Files likely touched:** `lib/milk-collections.ts` (new), `workers/collection/index.ts`, `app/market-context.tsx`, collection parser tests, context component tests
+**Files likely touched:** `lib/milk-collections.ts` (new), shared context loader/publisher, `app/market-context.tsx`, collection/context tests, fixtures
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Medium; create shared context wiring first if 19 is deferred.
 
-## Task 21: Add authorised GDT product context or record deferral
+## Task 21: Add authorised GDT context or record deferral
 
-**Description:** Surface WMP/SMP auction observations only when the intended use is covered by documented entitlements.
+**Description:** Deliver optional WMP/SMP observations only when their intended external use is covered.
 
 **Acceptance criteria:**
-- [ ] Record external-display rights before exposing results; an ordinary Insight subscription is not sufficient evidence.
-- [ ] Preserve event date, product, currency, unit and delivery/aggregation basis; compare only compatible observations.
-- [ ] Keep USD/tonne values separate from NZD/kgMS; omit or mark unavailable data without invented prices.
+- [ ] Record entitlement evidence or explicit deferral; ordinary subscriber access is not public-display authorisation.
+- [ ] Retain event/product/delivery basis, units and dates; compare only compatible observations and keep USD/tonne distinct from NZD/kgMS.
+- [ ] Use the independent context contract and exact expected-publication/grace rules or schedule-unknown state; never fabricate unavailable prices.
 
 **Verification:**
-- [ ] If included, test event/product matching, basis changes and partial failures and run the slice gate; if deferred, verify no unlicensed values are exposed and record the reason.
+- [ ] If included, test product/event/basis matching, threshold boundaries and isolated failure, then run the full gate; if deferred verify no unlicensed data is exposed.
 
-**Dependencies:** 20 or its explicit deferral; GDT entitlement required for inclusion.
+**Dependencies:** 14, 15c, 13b and GDT rights; no dependency on 19/20.
 
-**Files likely touched:** `lib/gdt.ts` (new if included), `workers/collection/index.ts`, `app/market-context.tsx`, GDT tests, context component tests
+**Files likely touched:** `lib/gdt.ts` (new if included), shared context loader/publisher, `app/market-context.tsx`, GDT/context tests, fixtures
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Medium; create shared context wiring first if other cards are deferred.
 
-## Checkpoint: Independent market context
+## Checkpoint: Independent context
 
-- [ ] Each included context source degrades independently and retains its native unit and dates.
-- [ ] Entitlements or explicit deferrals are documented; the core release remains usable without context.
+- [ ] Each included card has source rights, exact freshness behaviour or schedule-unknown wording, and isolated failure/recovery evidence.
+- [ ] Each omitted card is explicitly deferred; no context source blocks core publication or depends on another card.
 
 ## Task 22: Verify and prepare the release
 
-**Description:** Validate the integrated farmer journey, operating pipeline and rollback before public launch.
+**Description:** Collect integrated and operational evidence before public launch.
 
 **Acceptance criteria:**
-- [ ] Pass the complete journey and degraded states at 375px/desktop, including history gaps, basis transitions, source failures and rollover.
-- [ ] Record at least seven consecutive scheduled restricted-environment runs, inspect freshness/failures and demonstrate manifest rollback.
-- [ ] Document all exposed-source entitlements, remaining context deferrals and completed first-release gates before enabling public deployment.
+- [ ] Pass real-browser typing/slider, accessible history and degraded-data journeys at 375px/desktop; record SSR/HTTP checks separately.
+- [ ] Record seven consecutive restricted scheduled runs begun after 15b and manifest/mirror rollback evidence; collection/publication changes restart the run, UI-only changes do not.
+- [ ] Document rights for all exposed sources, context deferrals, per-context success/recovery checks and outstanding first-release approval gates before public deployment.
 
 **Verification:**
-- [ ] Run npm run lint, npm run typecheck, npm test, npm run build, npm run build:worker and npm run test:e2e; record browser and restricted-run evidence.
+- [ ] Run all six gate commands and record actual browser evidence, operational run scope, provenance labels and season-scoped rollback.
 
-**Dependencies:** 18 plus completed or explicitly deferred 19–21; all applicable rights and prior release gates.
+**Dependencies:** Core checkpoint (15c, 16, 17a, 17b, 18); each 19–21 completed or explicitly deferred; applicable rights and prior release gates.
 
 **Files likely touched:** `scripts/e2e.mjs`, `docs/operations.md`, `docs/data-rights.md`, `tasks/todo.md`, `README.md`
 
-**Estimated scope:** Medium; split provider-specific work further if the adapter requires more than five files.
+**Estimated scope:** Medium.
