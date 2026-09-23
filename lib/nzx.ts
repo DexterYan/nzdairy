@@ -49,6 +49,14 @@ function nonNegativeInt(value: unknown): number | null {
   return n !== null && Number.isInteger(n) && n >= 0 ? n : null;
 }
 
+// Epochs beyond ECMAScript's date range make Date methods throw or return NaN.
+const MAX_EPOCH_MS = 8.64e15;
+function usableEpochSeconds(value: unknown): number | null {
+  const n = num(value);
+  if (n === null || n <= 0 || n * 1000 > MAX_EPOCH_MS) return null;
+  return n;
+}
+
 // NZX stamps updatedAtDate as Auckland wall-clock misencoded as UTC, so the
 // raw value can sit up to 13 h in the future. Recover the real instant by
 // round-tripping both possible offsets; fall back to as-UTC when neither fits.
@@ -144,8 +152,8 @@ export function parseFuturesReference(
     return { status: "unavailable", reason: "missing-contract" };
   }
 
-  const expirySeconds = num(contract.expiryDate);
-  if (expirySeconds === null || expirySeconds <= 0) {
+  const expirySeconds = usableEpochSeconds(contract.expiryDate);
+  if (expirySeconds === null) {
     return { status: "unavailable", reason: "unverifiable" };
   }
   const expiry = new Date(expirySeconds * 1000);
@@ -159,8 +167,8 @@ export function parseFuturesReference(
     return { status: "unavailable", reason: "wrong-currency" };
   }
 
-  const updatedSeconds = num(contract.updatedAtDate);
-  if (updatedSeconds === null || updatedSeconds <= 0) {
+  const updatedSeconds = usableEpochSeconds(contract.updatedAtDate);
+  if (updatedSeconds === null) {
     return { status: "unavailable", reason: "unverifiable" };
   }
   const quotedMs = aucklandWallClockToUtc(updatedSeconds);
@@ -173,7 +181,7 @@ export function parseFuturesReference(
   const offer = positive(contract.offerPrice);
   const last = positive(contract.lastPrice);
   const priorSettlement = positive(contract.priorSettlement);
-  const tradeSeconds = num(contract.tradeDate);
+  const tradeSeconds = usableEpochSeconds(contract.tradeDate);
 
   let basis: QuoteBasis;
   let price: number;
@@ -184,7 +192,7 @@ export function parseFuturesReference(
     }
     basis = "bid-offer-midpoint";
     price = (bid + offer) / 2;
-  } else if (last !== null && tradeSeconds !== null && tradeSeconds > 0) {
+  } else if (last !== null && tradeSeconds !== null) {
     basis = "last-trade";
     price = last;
     tradedAt = isoDate(tradeSeconds);

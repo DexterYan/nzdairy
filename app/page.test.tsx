@@ -65,10 +65,10 @@ describe("official forecast card", () => {
     expect(screen.getByText("Announced 21 Sept 2026")).toBeDefined();
   });
 
-  it("shows the last successful source check", () => {
+  it("shows the last successful source check for each card", () => {
     view();
 
-    expect(screen.getByText("Checked 23 Sept 2026")).toBeDefined();
+    expect(screen.getAllByText("Checked 23 Sept 2026")).toHaveLength(2);
   });
 
   it("notes when the latest announcement left the forecast unchanged", () => {
@@ -163,6 +163,47 @@ describe("futures reference card", () => {
 
     const link = screen.getByRole("link", { name: "View NZX quotes" });
     expect(link.getAttribute("href")).toBe(fixture.futures.sourceUrl);
+  });
+
+  it("names a last-trade basis with its trade date", () => {
+    render(
+      <ComparisonView
+        snapshot={{
+          ...snapshot,
+          futures: {
+            ...okFutures,
+            basis: "last-trade",
+            bid: null,
+            offer: null,
+            last: 9.9,
+            price: 9.9,
+            tradedAt: "2026-09-22",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Last trade on 22 Sept 2026")).toBeDefined();
+  });
+
+  it("names a prior-settlement basis plainly", () => {
+    render(
+      <ComparisonView
+        snapshot={{
+          ...snapshot,
+          futures: {
+            ...okFutures,
+            basis: "prior-settlement",
+            bid: null,
+            offer: null,
+            last: null,
+            price: 9.85,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Prior settlement")).toBeDefined();
   });
 
   it("explains deterministic unavailability reasons", () => {

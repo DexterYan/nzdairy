@@ -149,6 +149,9 @@ function FuturesCard({
           Quoted {nzDateTime.format(new Date(futures.quotedAt))} (NZ time)
         </p>
       )}
+      <p className={styles.meta}>
+        Checked {nzDate.format(new Date(futures.retrievedAt))}
+      </p>
       <a className={styles.sourceLink} href={futures.sourceUrl}>
         View NZX quotes
       </a>

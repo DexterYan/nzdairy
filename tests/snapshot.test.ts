@@ -184,4 +184,139 @@ describe("readLatestSnapshot", () => {
 
     expect(snapshot).toBeNull();
   });
+
+  it("returns null for a futures contract from a substitute season", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { ...fixture.futures, contractCode: "MKPU26" } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when the futures expiry is not the season's closing September", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { ...fixture.futures, expiry: "2027-11-30" } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when the futures contract had already expired at collection", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { ...fixture.futures, expiry: "2026-05-31" } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when a last-trade price disagrees with the reference price", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "last-trade",
+          bid: null,
+          offer: null,
+          last: 9.9,
+          tradedAt: "2026-09-22",
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when a prior-settlement price disagrees with the reference price", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "prior-settlement",
+          bid: null,
+          offer: null,
+          last: null,
+          price: 9.5,
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null for a crossed market regardless of the stated basis", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "prior-settlement",
+          bid: 11,
+          offer: 10,
+          price: 9.85,
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when a two-sided market is not quoted as its midpoint", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "last-trade",
+          last: 9.9,
+          tradedAt: "2026-09-22",
+          price: 9.9,
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when a last-trade basis carries an invalid trade date", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "last-trade",
+          bid: null,
+          offer: null,
+          last: 9.875,
+          tradedAt: "22 September 2026",
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when the quote timestamp is not a valid instant", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({ ...fixture, futures: { ...fixture.futures, quotedAt: "yesterday" } }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("returns null when the stale flag disagrees with the quote age", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          quotedAt: "2026-09-15T06:00:00Z",
+          stale: false,
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
 });

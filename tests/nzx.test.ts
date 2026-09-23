@@ -153,6 +153,26 @@ describe("parseFuturesReference", () => {
     expect(result).toEqual({ status: "unavailable", reason: "no-basis" });
   });
 
+  it("treats an unrepresentable quote timestamp as unverifiable, not a crash", () => {
+    const html = fixture("unverifiable.html").replace(
+      '"updatedAtDate":0',
+      '"updatedAtDate":1e20',
+    );
+    const result = parseFuturesReference(html, NOW, SEASON);
+
+    expect(result).toEqual({ status: "unavailable", reason: "unverifiable" });
+  });
+
+  it("skips an unrepresentable trade date rather than crashing on last-trade selection", () => {
+    const html = fixture("last-trade.html").replace(
+      '"tradeDate":1790035200',
+      '"tradeDate":1e20',
+    );
+    const result = parseFuturesReference(html, NOW, SEASON);
+
+    expect(result).toMatchObject({ status: "ok", basis: "prior-settlement", price: 9.85 });
+  });
+
   it("matches the committed fixture snapshot the page renders from", () => {
     const result = parseFuturesReference(
       fixture("page-2026-09.html"),
