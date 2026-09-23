@@ -172,3 +172,103 @@
 - [x] No task remains larger than a focused implementation session.
 - [x] Source attribution and redistribution status are documented.
 - [ ] A human has reviewed the complete release before any public deployment.
+
+---
+
+# Design Extension Tasks
+
+Source of truth for what these tasks build: [`docs/design.md`](../docs/design.md)
+(seed 668827389 pass). The public-deployment gate above is unaffected by this work.
+
+## Task 9: Adopt design tokens and card refinements
+
+**Description:** Introduce the `docs/design.md` §3 custom properties in `globals.css`, then apply them to the existing cards: tinted header band with season chip, basis-tag price lockups, status chips for collection/age states, and the source-credit footer.
+
+**Acceptance criteria:**
+- [ ] `app/globals.css` defines every token from design.md §3 with the specified values; colours in `page.module.css` reference tokens instead of hardcoded hex.
+- [ ] Both cards show the price lockup with a basis tag: `FORECAST` on the official card; `MIDPOINT`, `LAST TRADE`, or `PRIOR SETTLEMENT` on the futures card per the snapshot's selected basis.
+- [ ] Collection/age states render as chips per design.md §4.6, keeping today's sentences as chip text; "Checked …" provenance stays plain meta text; no "live" claims anywhere.
+- [ ] Header band, season chip, and source-credit footer render with the official-green / futures-blue mark vocabulary.
+
+**Verification:**
+- [ ] Update page-level test assertions for the new markup; `npm run typecheck && npm run lint && npm test && npm run build`
+- [ ] Inspect the dev server at 375px and desktop widths: band, chips, tags, footer, and focus outlines.
+
+**Dependencies:** Task 8
+
+**Files likely touched:** `app/globals.css`, `app/page.module.css`, `app/comparison-view.tsx`, `app/page.test.tsx`
+
+**Estimated scope:** Medium
+
+## Task 10: Render the comparison strip
+
+**Description:** New pure-CSS figure under the comparison cards plotting the official low–mid–high range and the futures price on one padded domain, with opposed direct labels, a two-item key, and an accessible sentence. No charting library — HTML/CSS geometry only.
+
+**Acceptance criteria:**
+- [ ] Domain is `[min(low, futures), max(high, futures)]` padded 2% per side; markers are never clamped, so a futures price outside the published range still places interior to the track.
+- [ ] Official marker and label sit above the track, futures below — always, including coincident values; markers are ≥8px with a 2px surface ring.
+- [ ] The two-item key renders whenever both series show; official-only renders without a key; neither series renders no strip at all; no published range renders a two-dot scale without the range fill.
+- [ ] The figure carries `role="img"` with an aria-label sentence carrying the actual values; the same numbers remain in the cards' text.
+
+**Verification:**
+- [ ] Unit tests for the domain helper (padding, out-of-range futures, coincident values, degenerate inputs) and rendering tests for each degenerate state.
+- [ ] `npm run typecheck && npm run lint && npm test && npm run build`
+- [ ] Visual check at 375px and desktop for label collisions and overflow.
+
+**Dependencies:** Task 9
+
+**Files likely touched:** `lib/comparison-scale.ts` (new), `app/comparison-strip.tsx` (new), `app/comparison-view.tsx`, `app/page.module.css`, `app/comparison-strip.test.tsx` (new)
+
+**Estimated scope:** Medium
+
+## Task 11: Convert revenue results to stat tiles
+
+**Description:** Replace the results definition list with the tile grid from design.md §4.4 — sentence-case label, value, sub-caption — including the signed difference tile. Full-dollar figures are retained; the assumptions sentence is the rounding contract and stays unchanged.
+
+**Acceptance criteria:**
+- [ ] Four tiles render for valid input: official revenue, futures revenue, futures-versus-official difference, and $0.50/kgMS sensitivity, each with label and sub-caption.
+- [ ] The difference tile carries sign + word + colour (never colour alone); the "rounds to NZ$0" case keeps its sentence.
+- [ ] Futures-unavailable, blank, invalid, and overflow states render guidance in place of values; no zeros anywhere.
+- [ ] Tile values use proportional figures (no `tabular-nums` on tiles); scenario rows keep `tabular-nums`; tiles collapse to one column below 45rem.
+
+**Verification:**
+- [ ] Extend revenue-panel tests to cover tile markup and every applicable state-matrix row from design.md §5.
+- [ ] `npm run typecheck && npm run lint && npm test && npm run build`
+
+**Dependencies:** Task 9
+
+**Files likely touched:** `app/revenue-panel.tsx`, `app/page.module.css`, `app/revenue-panel.test.tsx`
+
+**Estimated scope:** Small
+
+## Checkpoint: Comparison surface redesigned
+
+- [ ] Full gate passes: typecheck, lint, tests, Next.js build.
+- [ ] Cards, strip, and tiles match design.md; verify against the seeded spec, not memory.
+- [ ] Keyboard-only and reduced-motion paths still work; 375px layout holds.
+
+## Task 12: Add the production slider
+
+**Description:** Vesper-style slider + text pair: a native range input under the production field that writes through to the text input, which remains the single source of truth and keeps the existing validation grammar.
+
+**Acceptance criteria:**
+- [ ] Native `<input type="range">` (20,000–500,000 kgMS, step 1,000) with an accessible label renders under the production text field.
+- [ ] Dragging writes the stepped value into the text field; typing moves the thumb to the nearest in-range position.
+- [ ] Out-of-range typed values never move the thumb past its stops; the existing guidance owns the error state.
+- [ ] The keyboard-only journey (tab to slider, arrow keys) still completes; the e2e journey includes a slider step.
+
+**Verification:**
+- [ ] Component tests for both write-through directions and out-of-range behaviour.
+- [ ] Full release gate: `npm run lint && npm run typecheck && npm test && npm run build && npm run build:worker && npm run test:e2e`
+
+**Dependencies:** Task 11
+
+**Files likely touched:** `app/revenue-panel.tsx`, `app/revenue-panel.test.tsx`, `scripts/e2e.mjs`
+
+**Estimated scope:** Small
+
+## Checkpoint: Design extension reviewed
+
+- [ ] Every design-extension acceptance criterion and verification step passes.
+- [ ] Rendered page matches design.md, including the §3.1 contrast values.
+- [ ] Human review of the redesigned page before merging to the release line.
