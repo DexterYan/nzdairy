@@ -105,7 +105,9 @@ export async function readLatestSnapshot(
   return parseSnapshot(body);
 }
 
-function parseSnapshot(value: unknown): MilkSnapshot | null {
+// Exported for the release loader, which parses snapshot objects read from
+// immutable release keys with the exact legacy v1 rules.
+export function parseSnapshot(value: unknown): MilkSnapshot | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
   if (candidate.schemaVersion !== 1) return null;

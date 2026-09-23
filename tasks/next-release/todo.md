@@ -69,12 +69,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Keep the legacy v1 snapshot intact and specify versioned companion objects and comparison inputs.
 
 **Acceptance criteria:**
-- [ ] Define manifest/history/context types, effective-time precision, identity/revision rules, bounded size budgets and the release-loader fallback contract from the plan.
-- [ ] Preserve legacy latest.json v1 semantics; specify immutable keys, previous-release descriptor, idempotent run IDs, conditional manifest update and provider-specific provenance/retention.
-- [ ] Test same-price/new-effective-time, identical refetch, revised payload, activity-only row updates, undated settlement exclusion, date-only intervals and no-change announcements.
+- [x] Define manifest/history/context types, effective-time precision, identity/revision rules, bounded size budgets and the release-loader fallback contract from the plan.
+- [x] Preserve legacy latest.json v1 semantics; specify immutable keys, previous-release descriptor, idempotent run IDs, conditional manifest update and provider-specific provenance/retention.
+- [x] Test same-price/new-effective-time, identical refetch, revised payload, activity-only row updates, undated settlement exclusion, date-only intervals and no-change announcements.
 
 **Verification:**
-- [ ] Run contract and v1-reader compatibility tests; verify conditional-write API semantics; add representative companion fixtures and run the full gate.
+- [x] Run contract and v1-reader compatibility tests; verify conditional-write API semantics; add representative companion fixtures and run the full gate.
 
 **Dependencies:** 13a only; no dependency on completed 13c.
 
