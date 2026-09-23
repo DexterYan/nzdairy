@@ -44,3 +44,23 @@ Release verification
 
 Task 10 and Task 11 are independent of each other and could run in parallel
 sessions; Task 12 shares `revenue-panel.tsx` with Task 11 and follows it.
+
+## Next Release: Market Changes and Farm Impact
+
+The proposed scope, data decisions and quality rules are in
+[`docs/next-release-plan.md`](../docs/next-release-plan.md). Tasks 13–22 in
+[`tasks/todo.md`](todo.md) extend the existing checklist without replacing prior
+release gates.
+
+```text
+Source/access decision (13) -> Observation contract (14)
+  -> Auditable publication (15) -> Historical changes (16)
+  -> Farm-impact history UI (17) -> Quote evidence (18)
+  -> FX context (19) -> Milk collections (20) -> Conditional GDT context (21)
+  -> Integrated release verification (22)
+```
+
+Checkpoints follow Tasks 15, 18 and 21. Fixture implementation can proceed while
+rights are unresolved; production use cannot. Unavailable context sources may be
+explicitly deferred without blocking the core release. Current-season history is
+the proposed scope extension; proprietary forecasting remains deferred.
