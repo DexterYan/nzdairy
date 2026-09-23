@@ -203,7 +203,11 @@ describe("readLatestSnapshot", () => {
 
   it("returns null when the futures contract had already expired at collection", async () => {
     const snapshot = await readLatestSnapshot(
-      bucketWith({ ...fixture, futures: { ...fixture.futures, expiry: "2026-05-31" } }),
+      bucketWith({
+        ...fixture,
+        collectedAt: "2027-10-01T06:00:00Z",
+        futures: { ...fixture.futures, expiry: "2027-09-30" },
+      }),
     );
 
     expect(snapshot).toBeNull();
@@ -303,6 +307,50 @@ describe("readLatestSnapshot", () => {
     );
 
     expect(snapshot).toBeNull();
+  });
+
+  it("returns null when a prior-settlement basis carries a qualified last trade", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "prior-settlement",
+          bid: null,
+          offer: null,
+          last: 9.9,
+          tradedAt: "2026-09-22",
+          price: 9.85,
+        },
+      }),
+    );
+
+    expect(snapshot).toBeNull();
+  });
+
+  it("keeps a prior-settlement basis whose last trade lacks its trade date", async () => {
+    const snapshot = await readLatestSnapshot(
+      bucketWith({
+        ...fixture,
+        futures: {
+          ...fixture.futures,
+          basis: "prior-settlement",
+          bid: null,
+          offer: null,
+          last: 9.9,
+          price: 9.85,
+        },
+      }),
+    );
+
+    expect(snapshot?.futures).toEqual({
+      ...fixture.futures,
+      basis: "prior-settlement",
+      bid: null,
+      offer: null,
+      last: 9.9,
+      price: 9.85,
+    });
   });
 
   it("returns null when the stale flag disagrees with the quote age", async () => {

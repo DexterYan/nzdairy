@@ -178,7 +178,10 @@ function parseFuturesBlock(
   // undefined = present but invalid; the parser never omits these silently.
   if (quotedAt === undefined || tradedAt === undefined) return null;
   if (quotedAt === null) return null;
+  // tradedAt is only ever persisted for the last-trade basis; a settlement
+  // or midpoint block carrying one contradicts the fallback priority.
   if (basis === "last-trade" && tradedAt === null) return null;
+  if (basis !== "last-trade" && tradedAt !== null) return null;
   const expectedStale = Date.parse(retrievedAt) - Date.parse(quotedAt) > 72 * 3_600_000;
   if (candidate.stale !== expectedStale) return null;
 

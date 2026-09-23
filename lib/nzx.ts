@@ -49,11 +49,12 @@ function nonNegativeInt(value: unknown): number | null {
   return n !== null && Number.isInteger(n) && n >= 0 ? n : null;
 }
 
-// Epochs beyond ECMAScript's date range make Date methods throw or return NaN.
-const MAX_EPOCH_MS = 8.64e15;
+// Past year 9999 toISOString emits expanded years ("+10000-…") that the
+// snapshot date format rejects, so treat such epochs as absent timestamps.
+const MAX_DATE_EPOCH_SECONDS = 253402300799; // 9999-12-31T23:59:59Z
 function usableEpochSeconds(value: unknown): number | null {
   const n = num(value);
-  if (n === null || n <= 0 || n * 1000 > MAX_EPOCH_MS) return null;
+  if (n === null || n <= 0 || n > MAX_DATE_EPOCH_SECONDS) return null;
   return n;
 }
 

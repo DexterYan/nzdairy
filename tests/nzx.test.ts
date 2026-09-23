@@ -7,6 +7,12 @@ import {
   expectedMkpContract,
   parseFuturesReference,
 } from "../lib/nzx";
+import {
+  LATEST_SNAPSHOT_KEY,
+  readLatestSnapshot,
+  type SnapshotBucket,
+  type SnapshotObject,
+} from "../lib/snapshot";
 
 // Pinned to the live-page capture instant so quote-age expectations never drift.
 const NOW = new Date("2026-09-23T00:03:00Z");
@@ -14,6 +20,15 @@ const SEASON = "2026/27";
 
 function fixture(name: string): string {
   return readFileSync(resolve(process.cwd(), "tests/fixtures/nzx", name), "utf8");
+}
+
+function bucketWith(futures: unknown): SnapshotBucket {
+  return {
+    async get(key: string): Promise<SnapshotObject | null> {
+      if (key !== LATEST_SNAPSHOT_KEY) return null;
+      return { json: async () => ({ ...latestSnapshot, futures }) };
+    },
+  };
 }
 
 describe("expectedMkpContract", () => {
@@ -171,6 +186,34 @@ describe("parseFuturesReference", () => {
     const result = parseFuturesReference(html, NOW, SEASON);
 
     expect(result).toMatchObject({ status: "ok", basis: "prior-settlement", price: 9.85 });
+  });
+
+  it("treats an out-of-range expiry epoch as unverifiable rather than persisting an unusable date", () => {
+    const html = fixture("page-2026-09.html").replace(
+      '"expiryDate":1822262400',
+      '"expiryDate":8640000000000',
+    );
+    const result = parseFuturesReference(html, NOW, SEASON);
+
+    expect(result).toEqual({ status: "unavailable", reason: "unverifiable" });
+  });
+
+  it("treats an out-of-range trade date as absent and still round-trips through the snapshot", async () => {
+    // 8.64e12 s is inside ECMAScript's date range but serializes as "+275760-…".
+    const html = fixture("last-trade.html").replace(
+      '"tradeDate":1790035200',
+      '"tradeDate":8640000000000',
+    );
+    const result = parseFuturesReference(html, NOW, SEASON);
+
+    expect(result).toMatchObject({
+      status: "ok",
+      basis: "prior-settlement",
+      price: 9.85,
+    });
+
+    const snapshot = await readLatestSnapshot(bucketWith(result));
+    expect(snapshot?.futures).toEqual(result);
   });
 
   it("matches the committed fixture snapshot the page renders from", () => {
