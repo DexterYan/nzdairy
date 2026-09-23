@@ -419,6 +419,57 @@ describe("futures reference card", () => {
     ).toBeDefined();
   });
 
+  it("ages an unavailable futures reference by its latest check", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: { status: "unavailable", reason: "crossed" },
+          checks: {
+            official: {
+              source: "official",
+              checkedAt: "2026-09-23T06:00:00Z",
+              outcome: "ok",
+              detail: null,
+            },
+            futures: {
+              source: "futures",
+              checkedAt: "2026-09-21T00:00:00Z",
+              outcome: "unavailable",
+              detail: "unavailable:crossed",
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Checked 21 Sept 2026")).toBeDefined();
+    expect(
+      screen.getByText("The last check is more than 36 hours old."),
+    ).toBeDefined();
+    // Nothing was retained, so no previous value can be claimed.
+    expect(
+      screen.queryByText(
+        "The latest collection on 21 Sept 2026 failed — showing the previous value.",
+      ),
+    ).toBeNull();
+  });
+
+  it("ages a missing futures block by the collection run itself", () => {
+    const { futures, ...officialOnly } = snapshot;
+    void futures;
+    const withoutFutures = {
+      ...officialOnly,
+      collectedAt: "2026-09-21T00:00:00Z",
+    } as MilkSnapshot;
+    render(<ComparisonView snapshot={withoutFutures} nowMs={FIXED_NOW} />);
+
+    expect(
+      screen.getByText("The last check is more than 36 hours old."),
+    ).toBeDefined();
+  });
+
   it("shows a plain unavailable state when no futures block was collected", () => {
     const { futures, ...officialOnly } = snapshot;
     void futures;

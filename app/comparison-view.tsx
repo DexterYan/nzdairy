@@ -119,6 +119,7 @@ function ComparisonCards({ snapshot, now }: { snapshot: MilkSnapshot; now: numbe
           futures={snapshot.futures}
           check={snapshot.checks?.futures}
           season={snapshot.season}
+          collectedAt={snapshot.collectedAt}
           now={now}
         />
       </article>
@@ -157,29 +158,60 @@ function CheckNotices({
   );
 }
 
+// An unavailable reference still shows when it was last checked, so a stalled
+// collector is visible even with nothing to price.
+function CheckAge({
+  check,
+  fallbackAt,
+  now,
+}: {
+  check?: SourceCheck;
+  fallbackAt: string;
+  now: number;
+}) {
+  const checkedAt = check?.checkedAt ?? fallbackAt;
+  const { checkStale } = freshness(null, checkedAt, now);
+  return (
+    <>
+      <p className={styles.meta}>Checked {nzDate.format(new Date(checkedAt))}</p>
+      {checkStale && (
+        <p className={styles.warning}>The last check is more than 36 hours old.</p>
+      )}
+    </>
+  );
+}
+
 function FuturesCard({
   futures,
   check,
   season,
+  collectedAt,
   now,
 }: {
   futures: FuturesBlock | undefined;
   check?: SourceCheck;
   season: string;
+  collectedAt: string;
   now: number;
 }) {
   if (futures === undefined) {
     return (
-      <p className={styles.unavailable}>
-        Futures reference is unavailable right now.
-      </p>
+      <>
+        <p className={styles.unavailable}>
+          Futures reference is unavailable right now.
+        </p>
+        <CheckAge check={check} fallbackAt={collectedAt} now={now} />
+      </>
     );
   }
   if (futures.status === "unavailable") {
     return (
-      <p className={styles.unavailable}>
-        {futuresUnavailableMessage(futures.reason, season)}
-      </p>
+      <>
+        <p className={styles.unavailable}>
+          {futuresUnavailableMessage(futures.reason, season)}
+        </p>
+        <CheckAge check={check} fallbackAt={collectedAt} now={now} />
+      </>
     );
   }
 
