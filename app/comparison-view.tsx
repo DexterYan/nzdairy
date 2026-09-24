@@ -319,8 +319,9 @@ function FuturesCard({
       : futures.basis === "last-trade" && futures.tradedAt !== null
         ? `Last trade on ${nzDate.format(new Date(futures.tradedAt))}`
         : "Prior settlement";
+  // Unknown stays unknown; only a real zero prints as zero (design §5).
   const size = (value: number | null) =>
-    value === null ? "n/a" : nzInt.format(value);
+    value === null ? "not available" : nzInt.format(value);
   // The persisted stale flag freezes at collection time; the 72-hour rule is
   // re-evaluated here so retained quotes keep aging.
   const { quoteOld } = freshness(
@@ -346,16 +347,26 @@ function FuturesCard({
         </span>
       </div>
       <p className={styles.meta}>{basisLine}</p>
+      {futures.basis === "bid-offer-midpoint" &&
+        futures.bid !== null &&
+        futures.offer !== null && (
+          <p className={styles.meta}>
+            Bid–offer spread ${(futures.offer - futures.bid).toFixed(2)}
+          </p>
+        )}
       <p className={styles.meta}>
         Contract {futures.contractCode} · expires{" "}
         {nzDate.format(new Date(futures.expiry))}
       </p>
       <p className={styles.meta}>
-        Bid size {size(futures.bidVolume)} · Offer size {size(futures.offerVolume)} ·
-        Traded volume {size(futures.tradedVolume)} · Open interest{" "}
-        {size(futures.openInterest)}
+        Market activity: {size(futures.tradedVolume)} traded · bid size{" "}
+        {size(futures.bidVolume)} · offer size {size(futures.offerVolume)} · open
+        interest {size(futures.openInterest)}
       </p>
       <ChipRow warnings={warnings} variant="futures" />
+      <p className={styles.meta}>
+        Delayed market reference — not an executable price.
+      </p>
       {futures.quotedAt && (
         <p className={styles.meta}>
           Quoted {nzDateTime.format(new Date(futures.quotedAt))} (NZ time)

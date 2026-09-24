@@ -227,13 +227,88 @@ describe("futures reference card", () => {
     ).toBeDefined();
   });
 
-  it("shows the available volumes and open interest", () => {
+  it("states market activity in plain language, zero included", () => {
     view();
 
     expect(
       screen.getByText(
-        "Bid size 3 · Offer size 58 · Traded volume 0 · Open interest 11,351",
+        "Market activity: 0 traded · bid size 3 · offer size 58 · open interest 11,351",
       ),
+    ).toBeDefined();
+  });
+
+  it("reads unknown activity as not available, never zero or illiquid", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: {
+            ...okFutures,
+            tradedVolume: null,
+            openInterest: null,
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Market activity: not available traded · bid size 3 · offer size 58 · open interest not available",
+      ),
+    ).toBeDefined();
+  });
+
+  it("shows the numeric spread on a two-sided quote", () => {
+    view();
+
+    expect(screen.getByText("Bid–offer spread $0.25")).toBeDefined();
+  });
+
+  it("omits the spread line without a two-sided quote", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: {
+            ...okFutures,
+            basis: "last-trade",
+            bid: null,
+            offer: null,
+            last: 9.9,
+            price: 9.9,
+            tradedAt: "2026-09-22",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/Bid–offer spread/)).toBeNull();
+  });
+
+  it("always flags an ok quote as a delayed reference, not executable", () => {
+    view();
+
+    expect(
+      screen.getByText("Delayed market reference — not an executable price."),
+    ).toBeDefined();
+  });
+
+  it("keeps the delayed-reference flag beside an old-quote warning", () => {
+    render(
+      <ComparisonView
+        nowMs={FIXED_NOW}
+        snapshot={{
+          ...snapshot,
+          futures: { ...okFutures, stale: false, quotedAt: "2026-09-19T00:00:00Z" },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Quote is more than 72 hours old.")).toBeDefined();
+    expect(
+      screen.getByText("Delayed market reference — not an executable price."),
     ).toBeDefined();
   });
 

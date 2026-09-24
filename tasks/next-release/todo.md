@@ -200,12 +200,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Improve existing quote evidence independently of history implementation.
 
 **Acceptance criteria:**
-- [ ] Display available spread, basis, quote/trade timestamps and activity without invented confidence or executable-price claims.
-- [ ] Unknown volume remains unknown; old and retained states remain explicit and age at request time.
-- [ ] Preserve existing source details and inspect combined history-unavailable and basis/source-change presentation at the core checkpoint.
+- [x] Display available spread, basis, quote/trade timestamps and activity without invented confidence or executable-price claims.
+- [x] Unknown volume remains unknown; old and retained states remain explicit and age at request time.
+- [x] Preserve existing source details and inspect combined history-unavailable and basis/source-change presentation at the core checkpoint.
 
 **Verification:**
-- [ ] Component tests cover missing activity, old/retained quotes and spread; run the slice gate and inspect mobile labels.
+- [x] Component tests cover missing activity, old/retained quotes and spread; run the slice gate and inspect mobile labels.
 
 **Dependencies:** 13b; can precede 16/17, but coordinate edits to ComparisonView.
 
