@@ -19,6 +19,7 @@ import type {
   SourceCheck,
 } from "../lib/snapshot";
 import ComparisonStrip from "./comparison-strip";
+import HistoryPanel from "./history-panel";
 import RevenuePanel, { type Movement } from "./revenue-panel";
 import styles from "./page.module.css";
 
@@ -117,6 +118,15 @@ export default function ComparisonView({
               futures={snapshot.futures}
               season={snapshot.season}
               movements={movements}
+            />
+            <HistoryPanel
+              history={history ?? null}
+              season={snapshot.season}
+              contract={
+                snapshot.futures !== undefined && snapshot.futures.status === "ok"
+                  ? snapshot.futures.contractCode
+                  : null
+              }
             />
           </>
         ) : (

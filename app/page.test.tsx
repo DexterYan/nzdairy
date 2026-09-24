@@ -800,7 +800,7 @@ describe("comparison strip wiring", () => {
   it("plots both references under the comparison cards", () => {
     view();
 
-    const figure = screen.getByRole("img");
+    const figure = screen.getByRole("img", { name: /Futures \$9\.88/ });
     expect(figure.getAttribute("aria-label")).toContain("Futures $9.88");
   });
 
@@ -815,9 +815,25 @@ describe("comparison strip wiring", () => {
       />,
     );
 
-    expect(screen.getByRole("img").getAttribute("aria-label")).toContain(
-      "Official forecast midpoint",
-    );
+    expect(
+      screen
+        .getByRole("img", { name: /Official forecast midpoint/ })
+        .getAttribute("aria-label"),
+    ).toContain("Official forecast midpoint");
+  });
+});
+
+describe("season history", () => {
+  it("renders the history section from the release history", () => {
+    view(lastTradeSnapshot, FIXED_NOW, undefined, fixtureHistory);
+
+    expect(screen.getByRole("region", { name: "Season history" })).toBeDefined();
+  });
+
+  it("shows no history section without a snapshot", () => {
+    view(null);
+
+    expect(screen.queryByRole("region", { name: "Season history" })).toBeNull();
   });
 });
 

@@ -182,12 +182,12 @@ in that slice. SSR/HTTP checks do not replace real-browser interaction evidence.
 **Description:** Add the chart and its equivalent dated table after the impact flow works.
 
 **Acceptance criteria:**
-- [ ] Render forecast announcement steps and verified futures points with native SVG; break lines at basis/provider changes, failed checks and gaps over 72 hours.
-- [ ] Provide a text/table equivalent with provenance, actual coverage dates and missing-history guidance; no fabricated daily forecast or trading observations.
-- [ ] Meet the approved next-release design at 375px/desktop, including keyboard access, long labels, reduced motion and forecast-range labelling.
+- [x] Render forecast announcement steps and verified futures points with native SVG; break lines at basis/provider changes, failed checks and gaps over 72 hours.
+- [x] Provide a text/table equivalent with provenance, actual coverage dates and missing-history guidance; no fabricated daily forecast or trading observations.
+- [x] Meet the approved next-release design at 375px/desktop, including keyboard access, long labels, reduced motion and forecast-range labelling.
 
 **Verification:**
-- [ ] Chart component tests cover gaps/revisions/transitions and text equivalence; run the slice gate and record real-browser keyboard/mobile checks separately from SSR tests.
+- [x] Chart component tests cover gaps/revisions/transitions and text equivalence; run the slice gate and record real-browser keyboard/mobile checks separately from SSR tests.
 
 **Dependencies:** 17a and 13b.
 
