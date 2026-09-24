@@ -46,16 +46,26 @@ const parkToStop = (value: number) =>
     Math.max(SLIDER_MIN, Math.round(value / SLIDER_STEP) * SLIDER_STEP),
   );
 
+// A validated change from the what-changed section, ready to translate into
+// revenue at the user's production. Read-only: production state stays here.
+export interface Movement {
+  label: string;
+  delta: number;
+  since: string;
+}
+
 export default function RevenuePanel({
   official,
   futures,
   season,
   storage,
+  movements,
 }: {
   official: OfficialForecast;
   futures?: FuturesBlock;
   season: string;
   storage?: Storage | null;
+  movements?: Movement[];
 }) {
   const resolvedStorage = useMemo(() => resolveStorage(storage), [storage]);
   const [raw, setRaw] = useState("");
@@ -189,44 +199,60 @@ export default function RevenuePanel({
           This production is too large to calculate.
         </p>
       ) : (
-        <dl className={styles.tiles}>
-          <div className={styles.tile}>
-            <dt className={styles.tileLabel}>Official forecast revenue</dt>
-            <dd className={styles.tileValue}>
-              {formatRevenue(officialRevenue as number)}
-            </dd>
-            <dd className={styles.tileCaption}>
-              at ${official.midpoint.toFixed(2)} /kgMS
-            </dd>
-          </div>
-          {futuresRevenue === null ? (
-            <div className={styles.tileGuidance}>
-              <dt className={styles.tileLabel}>Futures reference revenue</dt>
-              <dd>Futures revenue is unavailable right now.</dd>
+        <>
+          <dl className={styles.tiles}>
+            <div className={styles.tile}>
+              <dt className={styles.tileLabel}>Official forecast revenue</dt>
+              <dd className={styles.tileValue}>
+                {formatRevenue(officialRevenue as number)}
+              </dd>
+              <dd className={styles.tileCaption}>
+                at ${official.midpoint.toFixed(2)} /kgMS
+              </dd>
             </div>
-          ) : (
-            <>
-              <div className={styles.tile}>
+            {futuresRevenue === null ? (
+              <div className={styles.tileGuidance}>
                 <dt className={styles.tileLabel}>Futures reference revenue</dt>
-                <dd className={styles.tileValue}>{formatRevenue(futuresRevenue)}</dd>
-                <dd className={styles.tileCaption}>
-                  at ${futuresQuote?.price.toFixed(2)} /kgMS
-                </dd>
+                <dd>Futures revenue is unavailable right now.</dd>
               </div>
-              <DeltaTile
-                futuresRevenue={futuresRevenue}
-                officialRevenue={officialRevenue as number}
-              />
+            ) : (
+              <>
+                <div className={styles.tile}>
+                  <dt className={styles.tileLabel}>Futures reference revenue</dt>
+                  <dd className={styles.tileValue}>{formatRevenue(futuresRevenue)}</dd>
+                  <dd className={styles.tileCaption}>
+                    at ${futuresQuote?.price.toFixed(2)} /kgMS
+                  </dd>
+                </div>
+                <DeltaTile
+                  futuresRevenue={futuresRevenue}
+                  officialRevenue={officialRevenue as number}
+                />
+              </>
+            )}
+            <div className={styles.tile}>
+              <dt className={styles.tileLabel}>$0.50/kgMS sensitivity</dt>
+              <dd className={styles.tileValue}>
+                {formatRevenue(priceSensitivity(production))}
+              </dd>
+              <dd className={styles.tileCaption}>per $0.50 move</dd>
+            </div>
+          </dl>
+          {movements !== undefined && movements.length > 0 && (
+            <>
+              <h3 className={styles.scenarioTitle}>What a move means for you</h3>
+              <dl className={styles.tiles}>
+                {movements.map((movement) => (
+                  <MovementTile
+                    key={movement.label}
+                    movement={movement}
+                    production={production}
+                  />
+                ))}
+              </dl>
             </>
           )}
-          <div className={styles.tile}>
-            <dt className={styles.tileLabel}>$0.50/kgMS sensitivity</dt>
-            <dd className={styles.tileValue}>
-              {formatRevenue(priceSensitivity(production))}
-            </dd>
-            <dd className={styles.tileCaption}>per $0.50 move</dd>
-          </div>
-        </dl>
+        </>
       )}
       <h3 className={styles.scenarioTitle}>Three price scenarios</h3>
       <div className={styles.scenarios}>
@@ -290,20 +316,21 @@ export default function RevenuePanel({
   );
 }
 
-// The delta carries sign, word, and colour — three channels, never colour alone.
-function DeltaTile({
-  futuresRevenue,
-  officialRevenue,
+// The signed-value contract: sign, word, and colour carry direction — never
+// colour alone; below half a dollar the rounded figure shows NZ$0.
+function SignedTile({
+  label,
+  difference,
+  captionFor,
 }: {
-  futuresRevenue: number;
-  officialRevenue: number;
+  label: string;
+  difference: number;
+  captionFor: (up: boolean) => string;
 }) {
-  const difference = futuresRevenue - officialRevenue;
-  // Below half a dollar the rounded figures show no difference at all.
   if (Math.abs(difference) < 0.5) {
     return (
       <div className={styles.tile}>
-        <dt className={styles.tileLabel}>Futures vs official</dt>
+        <dt className={styles.tileLabel}>{label}</dt>
         <dd className={styles.tileValue}>{formatRevenue(0)}</dd>
         <dd className={styles.tileCaption}>
           The revenue difference rounds to NZ$0.
@@ -311,22 +338,55 @@ function DeltaTile({
       </div>
     );
   }
-  const above = difference > 0;
+  const up = difference > 0;
   return (
     <div className={styles.tile}>
-      <dt className={styles.tileLabel}>Futures vs official</dt>
+      <dt className={styles.tileLabel}>{label}</dt>
       <dd
         className={`${styles.tileValue} ${
-          above ? styles.tileValueUp : styles.tileValueDown
+          up ? styles.tileValueUp : styles.tileValueDown
         }`}
       >
-        {above ? "+" : "-"}
+        {up ? "+" : "-"}
         {formatRevenue(Math.abs(difference))}
       </dd>
-      <dd className={styles.tileCaption}>
-        {above ? "above" : "below"} the official forecast
-      </dd>
+      <dd className={styles.tileCaption}>{captionFor(up)}</dd>
     </div>
+  );
+}
+
+function DeltaTile({
+  futuresRevenue,
+  officialRevenue,
+}: {
+  futuresRevenue: number;
+  officialRevenue: number;
+}) {
+  return (
+    <SignedTile
+      label="Futures vs official"
+      difference={futuresRevenue - officialRevenue}
+      captionFor={(up) => `${up ? "above" : "below"} the official forecast`}
+    />
+  );
+}
+
+function MovementTile({
+  movement,
+  production,
+}: {
+  movement: Movement;
+  production: number;
+}) {
+  const magnitude = grossRevenue(production, Math.abs(movement.delta));
+  return (
+    <SignedTile
+      label={movement.label}
+      difference={movement.delta > 0 ? magnitude : -magnitude}
+      captionFor={(up) =>
+        `${up ? "+" : "-"}$${Math.abs(movement.delta).toFixed(2)}/kgMS since ${movement.since} at your production`
+      }
+    />
   );
 }
 

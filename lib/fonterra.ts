@@ -48,7 +48,7 @@ function stripTags(html: string): string {
 const PRICE_RE =
   /\$\s*(\d{1,2}\.\d{2})\s*(?:[-–]\s*\$?\s*(\d{1,2}\.\d{2}))?/;
 
-interface ParsedRow {
+export interface ParsedRow {
   label: string;
   date: string;
   midpoint: number | null;
@@ -74,7 +74,8 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-type LabelCell = { label: string; date: string } | "unparseable" | null;
+// "unparseable" carries the matched label so history gaps stay attributable.
+type LabelCell = { label: string; date: string } | { unparseable: string } | null;
 
 function validCalendarDate(year: number, month: number, day: number): boolean {
   const dt = new Date(Date.UTC(year, month - 1, day));
@@ -91,15 +92,16 @@ function parseLabelCell(cell: string): LabelCell {
   );
   // A known label without a readable date is an announcement we cannot place.
   if (!m) {
-    return /^\s*(Opening Forecast|Forecast Update|Final Update)\b/i.test(cell)
-      ? "unparseable"
-      : null;
+    const bare = cell.match(/\s*(Opening Forecast|Forecast Update|Final Update)\b/i);
+    return bare ? { unparseable: bare[1].replace(/update/i, "Update") } : null;
   }
   const month = MONTHS[m[3].toLowerCase()];
-  if (!month) return "unparseable";
+  if (!month) return { unparseable: m[1].replace(/update/i, "Update") };
   const day = parseInt(m[2], 10);
   const year = parseInt(m[4], 10);
-  if (!validCalendarDate(year, month, day)) return "unparseable";
+  if (!validCalendarDate(year, month, day)) {
+    return { unparseable: m[1].replace(/update/i, "Update") };
+  }
   const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   return { label: m[1].replace(/update/i, "Update"), date };
 }
@@ -164,10 +166,11 @@ export function currentSeason(now: Date): string {
   return `${startYear}/${String((startYear + 1) % 100).padStart(2, "0")}`;
 }
 
-export function parseOfficialForecast(
-  html: string,
-  now: Date,
-): OfficialForecastResult {
+// Shared table parsing: every recognisable announcement row of every season
+// table on the page, bucketed per season. The v1 forecast picks its latest
+// priced row; the history extractor walks all of them. Callers reading both
+// pass one parse through the `seasons` parameter instead of re-walking the page.
+export function parseSeasonTables(html: string): Map<string, ParsedRow[]> {
   const anchor = html.indexOf('id="farmgate-milk-price"');
   const scope = anchor >= 0 ? html.slice(anchor) : html;
 
@@ -204,9 +207,9 @@ export function parseOfficialForecast(
       const label = parseLabelCell(cells[0]);
       if (label === null) continue;
 
-      if (label === "unparseable") {
+      if ("unparseable" in label) {
         rows.push({
-          label: "",
+          label: label.unparseable,
           date: "",
           midpoint: null,
           low: null,
@@ -275,10 +278,24 @@ export function parseOfficialForecast(
         panePositions.filter((p) => p.pos < (table.index ?? 0)).at(-1)?.id ?? "",
       ) ?? "",
     );
-    const earliest = rows.reduce((a, b) => (a.date <= b.date ? a : b));
-    const season = labelSeason ?? seasonFromOpening(earliest.date);
+    // An announcement we cannot date cannot anchor the season's opening.
+    const dated = rows.filter((r) => r.date !== "");
+    const earliest = dated.length > 0
+      ? dated.reduce((a, b) => (a.date <= b.date ? a : b))
+      : null;
+    const season = labelSeason ?? (earliest === null ? null : seasonFromOpening(earliest.date));
+    if (season === null) continue;
     if (!seasons.has(season)) seasons.set(season, rows);
   }
+
+  return seasons;
+}
+
+export function parseOfficialForecast(
+  html: string,
+  now: Date,
+  seasons: Map<string, ParsedRow[]> = parseSeasonTables(html),
+): OfficialForecastResult {
 
   if (seasons.size === 0) {
     return { status: "unavailable", reason: "no-forecast-tables" };
@@ -335,4 +352,85 @@ export function parseOfficialForecast(
     noChangeUpdate,
     sourceUrl: FONTERA_SOURCE_URL,
   };
+}
+
+// A validated priced announcement, priced under its own row's range — today's
+// range is never applied to an old announcement.
+export interface AnnouncementRow {
+  label: string;
+  date: string;
+  midpoint: number;
+  low: number | null;
+  high: number | null;
+  rangeSource: RangeSource;
+}
+
+// An announcement the page shows but strict parsing cannot validate. Gaps keep
+// whatever is readable (label, date); the display shows them rather than
+// silently skipping them.
+export interface AnnouncementGap {
+  label: string | null;
+  date: string | null;
+}
+
+export interface SeasonAnnouncements {
+  season: string;
+  announcements: AnnouncementRow[];
+  gaps: AnnouncementGap[];
+}
+
+export type AnnouncementHistoryResult =
+  | { status: "ok"; seasons: SeasonAnnouncements[] }
+  | { status: "unavailable"; reason: "no-forecast-tables" };
+
+// Historical announcement rows already present in the source tables. Season
+// attribution is structural (pane label or the season's own opening row), so
+// an explicitly labelled new-season opening dated before 1 June lands in the
+// new season and the prior season's table never contaminates it. First-seen
+// dates belong to the collector run that first retrieves each row; the parser
+// reports only published dates.
+export function parseAnnouncementHistory(
+  html: string,
+  seasons: Map<string, ParsedRow[]> = parseSeasonTables(html),
+): AnnouncementHistoryResult {
+  if (seasons.size === 0) {
+    return { status: "unavailable", reason: "no-forecast-tables" };
+  }
+
+  const result: SeasonAnnouncements[] = [];
+  for (const [season, rows] of seasons) {
+    const announcements: AnnouncementRow[] = [];
+    const gaps: AnnouncementGap[] = [];
+    for (const row of rows) {
+      // No-change notices are events, not observations; they never reset the
+      // priced-announcement baseline.
+      if (row.noChange) continue;
+      if (row.unparseable || row.midpoint === null) {
+        gaps.push({
+          label: row.label === "" ? null : row.label,
+          date: row.date === "" ? null : row.date,
+        });
+        continue;
+      }
+      // A footnote range that contradicts its price invalidates the row.
+      if (
+        (row.low !== null && row.low > row.midpoint) ||
+        (row.high !== null && row.high < row.midpoint)
+      ) {
+        gaps.push({ label: row.label, date: row.date });
+        continue;
+      }
+      announcements.push({
+        label: row.label,
+        date: row.date,
+        midpoint: row.midpoint,
+        low: row.low,
+        high: row.high,
+        rangeSource: row.rangeSource,
+      });
+    }
+    announcements.sort((a, b) => a.date.localeCompare(b.date));
+    result.push({ season, announcements, gaps });
+  }
+  return { status: "ok", seasons: result };
 }

@@ -21,3 +21,26 @@ export function freshness(
     checkStale: nowMs - Date.parse(checkAt) > CHECK_STALE_AFTER_MS,
   };
 }
+
+// Why a reference cannot be treated as fresh, in gate order; null = fresh.
+// The what-changed gates and their explanation sentence share this ladder.
+export type ReferenceCause =
+  | "retained-value"
+  | "failed-check"
+  | "stale-check"
+  | "old-quote";
+
+export function referenceCause(
+  check: { outcome: string } | undefined,
+  checkAt: string,
+  quotedAt: string | null,
+  nowMs: number,
+): ReferenceCause | null {
+  if (check !== undefined && check.outcome !== "ok") {
+    return check.outcome === "retained" ? "retained-value" : "failed-check";
+  }
+  const { quoteOld, checkStale } = freshness(quotedAt, checkAt, nowMs);
+  if (checkStale) return "stale-check";
+  if (quoteOld) return "old-quote";
+  return null;
+}

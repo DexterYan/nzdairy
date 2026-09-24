@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fixture from "../fixtures/latest-snapshot.json";
 import { saveScenarios } from "../lib/scenarios";
 import type { FuturesBlock, OfficialForecast } from "../lib/snapshot";
-import RevenuePanel from "./revenue-panel";
+import RevenuePanel, { type Movement } from "./revenue-panel";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -18,6 +18,7 @@ function panel(
   season = "2026/27",
   storage: Storage | null | undefined = undefined,
   withOfficial: OfficialForecast = official,
+  movements?: Movement[],
 ) {
   render(
     <RevenuePanel
@@ -25,6 +26,7 @@ function panel(
       futures={futures}
       season={season}
       storage={storage}
+      movements={movements}
     />,
   );
 }
@@ -723,5 +725,130 @@ describe("scenario prices", () => {
 
     expect(screen.queryByText(/Infinity|NaN/)).toBeNull();
     expect(screen.getAllByText(/NZ\$/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("movement tiles", () => {
+  const weekly: Movement = {
+    label: "Impact of the weekly move",
+    delta: 0.2,
+    since: "17 Sept 2026",
+  };
+  const announcement: Movement = {
+    label: "Impact of the announcement move",
+    delta: -0.15,
+    since: "12 Jun 2026",
+  };
+
+  function movementsPanel(withMovements: Movement[] | undefined = [weekly]) {
+    panel(okFutures, "2026/27", undefined, official, withMovements);
+  }
+
+  it("renders a movement tile per comparable period with its caption", () => {
+    movementsPanel([weekly, announcement]);
+    enterProduction("150000");
+
+    expect(
+      screen.getByRole("heading", { name: "What a move means for you" }),
+    ).toBeDefined();
+    expect(screen.getByText("Impact of the weekly move")).toBeDefined();
+    expect(screen.getByText("Impact of the announcement move")).toBeDefined();
+    expect(screen.getByText("+NZ$30,000").className).toContain("tileValueUp");
+    expect(
+      screen.getByText("+$0.20/kgMS since 17 Sept 2026 at your production"),
+    ).toBeDefined();
+    expect(screen.getByText("-NZ$22,500").className).toContain("tileValueDown");
+    expect(
+      screen.getByText("-$0.15/kgMS since 12 Jun 2026 at your production"),
+    ).toBeDefined();
+  });
+
+  it("rounds a sub-half-dollar impact to NZ$0 without claiming a move", () => {
+    movementsPanel();
+    enterProduction("1");
+
+    expect(screen.getByText("Impact of the weekly move")).toBeDefined();
+    expect(
+      screen
+        .getAllByText("NZ$0")
+        .filter((el) => el.className.includes("tileValue")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText("The revenue difference rounds to NZ$0.").length,
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows NZ$0 movement tiles at zero production", () => {
+    movementsPanel();
+    enterProduction("0");
+
+    expect(screen.getByText("Impact of the weekly move")).toBeDefined();
+    expect(screen.getAllByText("NZ$0").length).toBe(8);
+  });
+
+  it("omits movement tiles while production is blank", () => {
+    movementsPanel();
+
+    expect(
+      screen.queryByRole("heading", { name: "What a move means for you" }),
+    ).toBeNull();
+  });
+
+  it("omits movement tiles for invalid production", () => {
+    movementsPanel();
+    enterProduction("abc");
+
+    expect(
+      screen.queryByRole("heading", { name: "What a move means for you" }),
+    ).toBeNull();
+  });
+
+  it("omits movement tiles when the calculation overflows", () => {
+    movementsPanel();
+    enterProduction("9".repeat(308));
+
+    expect(
+      screen.queryByRole("heading", { name: "What a move means for you" }),
+    ).toBeNull();
+  });
+
+  it("renders nothing without movements", () => {
+    panel();
+    enterProduction("150000");
+
+    expect(
+      screen.queryByRole("heading", { name: "What a move means for you" }),
+    ).toBeNull();
+  });
+
+  it("updates the movement value while typing", () => {
+    movementsPanel();
+    enterProduction("150000");
+    enterProduction("200000");
+
+    expect(screen.getByText("+NZ$40,000")).toBeDefined();
+  });
+
+  it("updates the movement value from the slider", () => {
+    movementsPanel();
+    enterProduction("150000");
+    fireEvent.change(
+      screen.getByRole("slider", { name: "Production slider" }),
+      { target: { value: "250000" } },
+    );
+
+    expect(screen.getByText("+NZ$50,000")).toBeDefined();
+  });
+
+  it("keeps movement tiles while scenarios are edited", () => {
+    movementsPanel([weekly, announcement]);
+    enterProduction("150000");
+    fireEvent.change(scenarioInput("Low price, NZD/kgMS"), {
+      target: { value: "8" },
+    });
+
+    expect(screen.getByText("NZ$1,200,000")).toBeDefined();
+    expect(screen.getByText("Impact of the weekly move")).toBeDefined();
+    expect(screen.getByText("Impact of the announcement move")).toBeDefined();
   });
 });

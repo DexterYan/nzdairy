@@ -1,4 +1,15 @@
-import { freshness } from "../lib/freshness";
+import {
+  aucklandDayStartMs,
+  effectiveDate,
+  futuresChanges,
+  officialRevision,
+  type ChangeOutcome,
+  type OfficialRevision,
+} from "../lib/changes";
+import type { SeasonHistory } from "../lib/history";
+import { Fragment, type ReactNode } from "react";
+import { freshness, referenceCause, type ReferenceCause } from "../lib/freshness";
+import type { ReadProvenance } from "../lib/release";
 import type {
   FuturesBlock,
   FuturesReason,
@@ -7,15 +18,10 @@ import type {
   SourceCheck,
 } from "../lib/snapshot";
 import ComparisonStrip from "./comparison-strip";
-import RevenuePanel from "./revenue-panel";
+import { basisLabel, nzDate } from "./format";
+import HistoryPanel from "./history-panel";
+import RevenuePanel, { type Movement } from "./revenue-panel";
 import styles from "./page.module.css";
-
-const nzDate = new Intl.DateTimeFormat("en-NZ", {
-  timeZone: "Pacific/Auckland",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
 
 const nzDateTime = new Intl.DateTimeFormat("en-NZ", {
   timeZone: "Pacific/Auckland",
@@ -37,15 +43,34 @@ const BASIS_TAGS: Record<QuoteBasis, string> = {
 export default function ComparisonView({
   snapshot,
   nowMs,
+  provenance = "unknown",
+  history = null,
 }: {
   snapshot: MilkSnapshot | null;
   nowMs?: number;
+  // Absent provenance is the legacy path: unknown, never guessed live.
+  provenance?: ReadProvenance;
+  // Legacy reads have no history; comparisons then explain themselves.
+  history?: SeasonHistory | null;
 }) {
   // Staleness is a display rule evaluated at request time, so retained data
   // keeps aging even while the collector fails.
   // Request-time clock is sound here: force-dynamic server component.
   // eslint-disable-next-line react-hooks/purity
   const now = nowMs ?? Date.now();
+  const changes = futuresChanges({
+    history,
+    snapshot,
+    nowMs: now,
+  });
+  const revision = officialRevision(history);
+  const movements =
+    changes === null
+      ? undefined
+      : [
+          movementOf("Impact of the weekly move", changes.weekly),
+          movementOf("Impact of the announcement move", changes.sinceAnnouncement),
+        ].filter((movement): movement is Movement => movement !== null);
   return (
     <div className={styles.page}>
       <div className={styles.band}>
@@ -68,10 +93,26 @@ export default function ComparisonView({
         {snapshot ? (
           <>
             <ComparisonCards snapshot={snapshot} now={now} />
+            <WhatChanged
+              changes={changes}
+              revision={revision}
+              snapshot={snapshot}
+              now={now}
+            />
             <RevenuePanel
               official={snapshot.official}
               futures={snapshot.futures}
               season={snapshot.season}
+              movements={movements}
+            />
+            <HistoryPanel
+              history={history}
+              season={snapshot.season}
+              contract={
+                snapshot.futures !== undefined && snapshot.futures.status === "ok"
+                  ? snapshot.futures.contractCode
+                  : null
+              }
             />
           </>
         ) : (
@@ -88,7 +129,7 @@ export default function ComparisonView({
           <span className={styles.dotFutures} aria-hidden="true" />
           NZX futures
         </p>
-        <p>Development preview — data is a frozen fixture, not live prices.</p>
+        <p>{footerNotice(provenance, snapshot)}</p>
       </footer>
     </div>
   );
@@ -264,8 +305,9 @@ function FuturesCard({
       : futures.basis === "last-trade" && futures.tradedAt !== null
         ? `Last trade on ${nzDate.format(new Date(futures.tradedAt))}`
         : "Prior settlement";
+  // Unknown stays unknown; only a real zero prints as zero (design §5).
   const size = (value: number | null) =>
-    value === null ? "n/a" : nzInt.format(value);
+    value === null ? "not available" : nzInt.format(value);
   // The persisted stale flag freezes at collection time; the 72-hour rule is
   // re-evaluated here so retained quotes keep aging.
   const { quoteOld } = freshness(
@@ -291,16 +333,26 @@ function FuturesCard({
         </span>
       </div>
       <p className={styles.meta}>{basisLine}</p>
+      {futures.basis === "bid-offer-midpoint" &&
+        futures.bid !== null &&
+        futures.offer !== null && (
+          <p className={styles.meta}>
+            Bid–offer spread ${(futures.offer - futures.bid).toFixed(2)}
+          </p>
+        )}
       <p className={styles.meta}>
         Contract {futures.contractCode} · expires{" "}
         {nzDate.format(new Date(futures.expiry))}
       </p>
       <p className={styles.meta}>
-        Bid size {size(futures.bidVolume)} · Offer size {size(futures.offerVolume)} ·
-        Traded volume {size(futures.tradedVolume)} · Open interest{" "}
-        {size(futures.openInterest)}
+        Market activity: {size(futures.tradedVolume)} traded · bid size{" "}
+        {size(futures.bidVolume)} · offer size {size(futures.offerVolume)} · open
+        interest {size(futures.openInterest)}
       </p>
       <ChipRow warnings={warnings} variant="futures" />
+      <p className={styles.meta}>
+        Delayed market reference — not an executable price.
+      </p>
       {futures.quotedAt && (
         <p className={styles.meta}>
           Quoted {nzDateTime.format(new Date(futures.quotedAt))} (NZ time)
@@ -314,6 +366,21 @@ function FuturesCard({
       </a>
     </>
   );
+}
+
+// Provenance wording from the next-release design §6 — no variant claims
+// live prices, and legacy data never guesses how it was collected.
+function footerNotice(
+  provenance: ReadProvenance,
+  snapshot: MilkSnapshot | null,
+): string {
+  if (provenance === "collected" && snapshot !== null) {
+    return `Collected from Fonterra and NZX on ${nzDate.format(new Date(snapshot.collectedAt))} — delayed reference data, not live prices.`;
+  }
+  if (provenance === "fixture") {
+    return "Development preview — showing a fixture snapshot, not live prices.";
+  }
+  return "Reference data collected from official sources; collection date unknown — not live prices.";
 }
 
 function futuresUnavailableMessage(reason: FuturesReason, season: string): string {
@@ -338,4 +405,193 @@ function futuresUnavailableMessage(reason: FuturesReason, season: string): strin
     case "not-collected":
       return "The futures reference was not collected in the last check.";
   }
+}
+
+// Next-release design §2: one entry per comparison period, dated and worded;
+// suppressed periods explain themselves and never show a delta.
+function WhatChanged({
+  changes,
+  revision,
+  snapshot,
+  now,
+}: {
+  changes: ReturnType<typeof futuresChanges>;
+  revision: OfficialRevision | null;
+  snapshot: MilkSnapshot;
+  now: number;
+}) {
+  if (changes === null && revision === null) return null;
+  const entries: { key: string; plain: string; node: ReactNode }[] = [];
+  if (changes !== null) {
+    entries.push(
+      periodEntry("weekly", "Since last week", changes.weekly, snapshot, now),
+      periodEntry(
+        "announcement",
+        "Since Fonterra's announcement",
+        changes.sinceAnnouncement,
+        snapshot,
+        now,
+      ),
+    );
+  }
+  if (revision !== null) {
+    const sentence = revisionSentence(revision);
+    entries.push({
+      key: "revision",
+      plain: sentence,
+      node: <p className={styles.changeEntry}>{sentence}</p>,
+    });
+  }
+  // Both periods can suppress with the same sentence (e.g. a basis change);
+  // saying it twice would read as a bug, so render each sentence once.
+  const seen = new Set<string>();
+  const unique = entries.filter((entry) => {
+    if (seen.has(entry.plain)) return false;
+    seen.add(entry.plain);
+    return true;
+  });
+  return (
+    <section
+      className={styles.whatChanged}
+      aria-labelledby="what-changed-heading"
+    >
+      <h2 id="what-changed-heading" className={styles.cardTitle}>
+        What changed
+      </h2>
+      {unique.map((entry) => (
+        <Fragment key={entry.key}>{entry.node}</Fragment>
+      ))}
+    </section>
+  );
+}
+
+function periodEntry(
+  period: "weekly" | "announcement",
+  title: string,
+  outcome: ChangeOutcome,
+  snapshot: MilkSnapshot,
+  now: number,
+): { key: string; plain: string; node: ReactNode } {
+  if (outcome.status === "comparable") {
+    const { endpoint, baseline, delta } = outcome;
+    const endPrice = `$${endpoint.value.toFixed(2)}`;
+    const basePrice = `$${baseline.value.toFixed(2)}`;
+    const endDate = displayDate(effectiveDate(endpoint.effective));
+    const baseDate = displayDate(effectiveDate(baseline.effective));
+    const words =
+      delta > 0
+        ? `up $${Math.abs(delta).toFixed(2)}`
+        : delta < 0
+          ? `down $${Math.abs(delta).toFixed(2)}`
+          : "unchanged";
+    const plain = `${title} — futures reference ${endPrice} on ${endDate}, ${words} from ${basePrice} on ${baseDate}.`;
+    return {
+      key: period,
+      plain,
+      node: (
+        <p className={styles.changeEntry}>
+          <strong>{title}</strong> — futures reference {endPrice} on {endDate},{" "}
+          <span
+            className={
+              delta > 0
+                ? styles.changeDeltaUp
+                : delta < 0
+                  ? styles.changeDeltaDown
+                  : undefined
+            }
+          >
+            {words}
+          </span>{" "}
+          from {basePrice} on {baseDate}.
+        </p>
+      ),
+    };
+  }
+  const sentence = suppressionSentence(period, outcome, snapshot, now);
+  return {
+    key: period,
+    plain: sentence,
+    node: <p className={styles.changeSuppressed}>{sentence}</p>,
+  };
+}
+
+function suppressionSentence(
+  period: "weekly" | "announcement",
+  outcome: Extract<ChangeOutcome, { status: "suppressed" }>,
+  snapshot: MilkSnapshot,
+  now: number,
+): string {
+  if (outcome.reason === "endpoint-not-fresh") {
+    return `The current reference cannot be treated as fresh (${notFreshCause(snapshot, now)}), so no ${period} comparison is shown.`;
+  }
+  if (outcome.reason === "basis-changed" && outcome.transition !== null) {
+    const { on, from, to } = outcome.transition;
+    return `The futures reference changed basis on ${displayDate(on)} (${basisLabel(from)} → ${basisLabel(to)}), so values either side are not directly comparable.`;
+  }
+  if (outcome.reason === "source-changed" && outcome.transition !== null) {
+    const { on } = outcome.transition;
+    return `The futures reference changed source on ${displayDate(on)}; earlier values are not directly comparable.`;
+  }
+  if (
+    outcome.observationsBegin === null &&
+    nearSeasonStart(snapshot.season, now)
+  ) {
+    return `A new season began on 1 June — changes compare within the ${snapshot.season} season only.`;
+  }
+  const withWhom =
+    period === "weekly" ? "last week" : "Fonterra's announcement";
+  const begin = outcome.observationsBegin;
+  return `Not enough collected history yet to compare with ${withWhom}${begin === null ? "" : ` — observations begin ${displayDate(begin)}`}.`;
+}
+
+// Wording for the shared freshness ladder; the endpoint-age gate in
+// lib/changes has no sentence of its own and falls back to the old-quote text.
+const NOT_FRESH_LABELS: Record<ReferenceCause, string> = {
+  "retained-value": "a retained value",
+  "failed-check": "a failed check",
+  "stale-check": "a stale check",
+  "old-quote": "an old quote",
+};
+
+function notFreshCause(snapshot: MilkSnapshot, now: number): string {
+  const futures = snapshot.futures;
+  const ok = futures !== undefined && futures.status === "ok";
+  const check = snapshot.checks?.futures;
+  const fallbackAt = ok ? futures.retrievedAt : snapshot.collectedAt;
+  return NOT_FRESH_LABELS[
+    referenceCause(
+      check,
+      check?.checkedAt ?? fallbackAt,
+      ok ? futures.quotedAt : null,
+      now,
+    ) ?? "old-quote"
+  ];
+}
+
+function revisionSentence(revision: OfficialRevision): string {
+  return `Fonterra forecast $${revision.current.value.toFixed(2)} on ${displayDate(revision.current.on)}, revised from $${revision.previous.value.toFixed(2)} on ${displayDate(revision.previous.on)}.`;
+}
+
+const SEASON_START_WINDOW_MS = 14 * 24 * 3_600_000;
+
+// Presentation heuristic from the design: right after 1 June, "not enough
+// history" is expected, not a fault — frame it as the season boundary.
+function nearSeasonStart(season: string, now: number): boolean {
+  const year = Number(season.slice(0, 4));
+  if (!Number.isInteger(year)) return false;
+  const start = aucklandDayStartMs(`${year}-06-01`);
+  return now >= start && now < start + SEASON_START_WINDOW_MS;
+}
+
+function movementOf(label: string, outcome: ChangeOutcome): Movement | null {
+  if (outcome.status !== "comparable") return null;
+  return {
+    label,
+    delta: outcome.delta,
+    since: displayDate(effectiveDate(outcome.baseline.effective)),
+  };
+}
+
+function displayDate(isoDate: string): string {
+  return nzDate.format(new Date(`${isoDate}T00:00:00Z`));
 }

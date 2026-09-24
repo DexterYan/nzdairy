@@ -5,6 +5,7 @@ import latestSnapshot from "../fixtures/latest-snapshot.json";
 import {
   FONTERA_SOURCE_URL,
   currentSeason,
+  parseAnnouncementHistory,
   parseOfficialForecast,
 } from "../lib/fonterra";
 
@@ -210,6 +211,116 @@ describe("parseOfficialForecast", () => {
       announcedAt: persisted.announcedAt,
       noChangeUpdate: persisted.noChangeUpdate,
       sourceUrl: persisted.sourceUrl,
+    });
+  });
+});
+
+describe("parseAnnouncementHistory", () => {
+  it("exposes every priced current-season row oldest-first, skipping no-change events", () => {
+    const result = parseAnnouncementHistory(fixture("history-multi-season.html"));
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    const current = result.seasons.find((s) => s.season === "2026/27");
+    expect(current?.announcements).toEqual([
+      {
+        label: "Opening Forecast",
+        date: "2026-05-28",
+        midpoint: 10.0,
+        low: 9.0,
+        high: 10.5,
+        rangeSource: "footnote",
+      },
+      {
+        label: "Forecast Update",
+        date: "2026-09-21",
+        midpoint: 9.5,
+        low: 8.5,
+        high: 10.5,
+        rangeSource: "inline",
+      },
+    ]);
+    expect(current?.gaps).toEqual([]);
+  });
+
+  it("keeps the prior season separate, including its post-opening updates", () => {
+    const result = parseAnnouncementHistory(fixture("history-multi-season.html"));
+    if (result.status !== "ok") return;
+
+    const prior = result.seasons.find((s) => s.season === "2025/26");
+    expect(prior?.announcements.map((a) => a.date)).toEqual(["2025-05-29", "2026-04-28"]);
+    // A pre-June new-season opening never imports the prior season's rows.
+    const current = result.seasons.find((s) => s.season === "2026/27");
+    expect(current?.announcements.map((a) => a.date)).not.toContain("2026-04-28");
+  });
+
+  it("preserves unreadable earlier rows as gaps with whatever is readable", () => {
+    const result = parseAnnouncementHistory(fixture("history-unreadable-older.html"));
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    const current = result.seasons.find((s) => s.season === "2026/27");
+    expect(current?.gaps).toEqual([
+      { label: "Forecast Update", date: null },
+      { label: "Forecast Update", date: "2026-09-05" },
+    ]);
+    expect(current?.announcements.map((a) => a.date)).toEqual(["2026-05-28", "2026-09-21"]);
+  });
+
+  it("turns an older row whose footnote range contradicts its price into a gap", () => {
+    const result = parseAnnouncementHistory(fixture("history-invalid-older-range.html"));
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    const current = result.seasons.find((s) => s.season === "2026/27");
+    expect(current?.gaps).toEqual([{ label: "Forecast Update", date: "2026-09-02" }]);
+    expect(current?.announcements.map((a) => a.date)).toEqual(["2026-05-28", "2026-09-21"]);
+
+    // The v1 latest-forecast path is unaffected: its own row is valid.
+    const forecast = parseOfficialForecast(fixture("history-invalid-older-range.html"), NOW);
+    expect(forecast).toMatchObject({ status: "ok", announcedAt: "2026-09-21", midpoint: 9.5 });
+  });
+
+  it("walks the real page's current-season table in date order", () => {
+    const result = parseAnnouncementHistory(fixture("page-2026-09.html"));
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    const current = result.seasons.find((s) => s.season === "2026/27");
+    expect(current?.announcements).toEqual([
+      {
+        label: "Opening Forecast",
+        date: "2026-05-28",
+        midpoint: 9.75,
+        low: 8.0,
+        high: 10.5,
+        rangeSource: "footnote",
+      },
+      {
+        label: "Opening Forecast",
+        date: "2026-07-13",
+        midpoint: 9.25,
+        low: 8.0,
+        high: 10.5,
+        rangeSource: "footnote",
+      },
+      {
+        label: "Forecast Update",
+        date: "2026-09-21",
+        midpoint: 9.5,
+        low: 8.5,
+        high: 10.5,
+        rangeSource: "inline",
+      },
+    ]);
+    expect(current?.gaps).toEqual([]);
+    expect(result.seasons.map((s) => s.season)).toContain("2025/26");
+  });
+
+  it("fails only when the page has no forecast tables at all", () => {
+    expect(parseAnnouncementHistory(fixture("malformed.html"))).toEqual({
+      status: "unavailable",
+      reason: "no-forecast-tables",
     });
   });
 });

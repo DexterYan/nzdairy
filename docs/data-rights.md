@@ -14,6 +14,43 @@ at 06:00 UTC; the page itself is delayed 20 minutes (per NZX terms), and the
 displayed value ages past 72 hours before it is labelled old. Sources are
 attributed on the page via "View official source" / "View NZX quotes" links.
 
+## Next-release source requirements (Task 13a)
+
+Field-level requirements for the market-changes release, written against the
+parsers as they exist today (`lib/nzx.ts`, `lib/fonterra.ts`, `lib/snapshot.ts`).
+Provider selection (Task 13c) can stay pending: Tasks 14–18 build against
+fixtures that satisfy this matrix.
+
+**Current collection is not fixture-only, and it is not production access.**
+The collector already fetches the live Fonterra and NZX pages on every run and
+writes private snapshots to local R2; `fixtures/latest-snapshot.json` only
+seeds the web tier's local preview. That collection is permitted local use.
+What stays blocked is public display (above) and — for the next release —
+production use of a replacement or supplementary feed, which requires the
+entitlement evidence Task 13c records. Operational readiness of the scheduled
+runs in a provisioned environment is unverified separately from the presence
+of collector code.
+
+| Requirement | Today (public NZX page) | Production feed must confirm | Historical price time |
+|---|---|---|---|
+| Exact current-season contract (`MKPUyy`, September expiry of the closing year) | `contractCode` with validated `expiryDate` | Contract coverage across seasons in use; no substitutes | Contract is part of observation identity |
+| Currency and unit (`NZD`, `NZD/kgMS`) | Enforced by the parser | Same | Identity fields |
+| Two-sided bid/offer with sizes | `bidPrice`/`offerPrice`, `bidVolume`/`offerVolume`; crossed markets rejected | Availability and semantics of sizes | `bid-offer-midpoint` needs a provider-verified quote time; today's `updatedAtDate` is a row-update time and qualifies only if its price-observation meaning is documented |
+| Last trade | `lastPrice` with date-only `tradeDate` | Prefer trade time with intraday precision | `last-trade` uses the actual trade time, never a row-update time; date-only trades cover the whole Auckland day |
+| Prior settlement | `priorSettlement` with no session identity | Settlement session/date must be present | Without verified session identity it stays in the v1 comparison but is ineligible for history |
+| Activity context | `tradedVolume`, `priorDayOpenInterest` | Same | Never establishes a price time |
+| History depth | Only what our own collection has observed since it began | Available backfill depth and permission to store/redistribute derived history | Weekly and since-announcement baselines need at minimum multi-week coverage; actual coverage is displayed honestly |
+| Raw evidence archival | Each successful source result archived before publish | Permitted retention duration (or documented unlimited retention) with expiry cleanup | If raw retention is not permitted: parsed provenance only, replay declared unavailable |
+| Public display and derived outputs | Blocked (see above) | Billboard/redistribution agreement or written permission covering derived outputs | — |
+| Official announcement history | Latest priced row parsed from Fonterra's page | Reuse basis for Fonterra pages | Dated, season-labelled priced announcements; no-change notices are events, not prices |
+
+**Effective-time semantics** (from the next-release plan): observation identity
+is (series, provider, contract/period, basis, source-effective instant-or-date).
+Identical payloads for that identity deduplicate; a changed payload creates an
+immutable revision; a newer retrieval or check alone is never a new
+observation. Date-only observations cover the entire Auckland day. Check
+outcomes stay separate from observations.
+
 ## Who owns the data
 
 - Under the April 2021 NZX–SGX partnership, NZX delisted its dairy derivatives
@@ -63,7 +100,7 @@ confirm with SGX before relying on it.
 2. Record the agreement (or the confirmation email) in this file with its
    date and scope.
 3. Re-enable `workers_dev` / `preview_urls` in both wrangler configs and
-   complete the human-review checkpoint in `tasks/todo.md` — the e2e gate
+   complete the human-review checkpoint in `tasks/first-release/todo.md` — the e2e gate
    will pass once, and only once, the flags are intentionally flipped.
 
 ## Sources (checked 23 September 2026)

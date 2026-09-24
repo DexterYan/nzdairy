@@ -1,32 +1,54 @@
 // Scheduled collector: daily at 06:00 UTC it fetches both sources, archives
-// each successful result under a timestamped key, then publishes the combined
-// latest snapshot. On partial failure the prior valid block is retained with
-// its original timestamps.
+// each successful result under a timestamped key, then publishes a release
+// (immutable snapshot/history objects, conditional manifest, v1 mirror). On
+// partial failure the prior valid block is retained with its original
+// timestamps.
 
 import {
   currentSeason,
   FONTERA_SOURCE_URL,
+  parseAnnouncementHistory,
   parseOfficialForecast,
+  parseSeasonTables,
+  type AnnouncementRow,
 } from "../../lib/fonterra";
 import { NZX_SOURCE_URL, parseFuturesReference } from "../../lib/nzx";
 import {
-  LATEST_SNAPSHOT_KEY,
   readLatestSnapshot,
   type FuturesBlock,
   type MilkSnapshot,
   type OfficialForecast,
-  type SnapshotObject,
   type SourceCheck,
 } from "../../lib/snapshot";
 import { fetchSource } from "./fetch-source";
+import {
+  cleanupExpiredArchives,
+  log,
+  publishRelease,
+  type CollectionBucket,
+} from "./publish";
+import type { PutCondition } from "../../lib/release";
 
-export interface CollectorEnv {
-  SNAPSHOTS: CollectionBucket;
+export type { CollectionBucket } from "./publish";
+
+// Structural subset of the R2 binding (Workers API reference, 2026-09-24):
+// conditional put() stores nothing and returns null when the precondition
+// fails; get() exposes the etag a later If-Match must carry.
+interface R2ObjectLike {
+  etag?: string;
+  httpEtag?: string;
+  key?: string;
 }
 
-export interface CollectionBucket {
-  get(key: string): Promise<SnapshotObject | null>;
-  put(key: string, value: string): Promise<unknown>;
+export interface R2BucketLike {
+  get(key: string): Promise<(R2ObjectLike & { json(): Promise<unknown> }) | null>;
+  put(key: string, value: string, options?: { onlyIf?: Headers }): Promise<R2ObjectLike | null>;
+  list(options?: { prefix?: string }): Promise<{ objects: R2ObjectLike[] }>;
+  delete(key: string): Promise<void>;
+}
+
+export interface CollectorEnv {
+  SNAPSHOTS: R2BucketLike;
 }
 
 interface ScheduledController {
@@ -45,13 +67,46 @@ const collector = {
     ctx: ScheduledContext,
     deps?: { fetch?: typeof fetch },
   ): Promise<void> {
-    ctx.waitUntil(collect(controller, env, deps?.fetch));
+    ctx.waitUntil(collect(controller, adaptBucket(env.SNAPSHOTS), deps?.fetch));
   },
 };
 
+// PutCondition → R2 onlyIf headers: If-Match for update-only-when-unchanged,
+// If-None-Match:* for create-only. The binding's null (nothing stored) on
+// precondition failure maps to false.
+function conditionHeaders(condition: PutCondition): Headers {
+  return "ifNoneMatchAny" in condition
+    ? new Headers({ "if-none-match": "*" })
+    : new Headers({ "if-match": condition.ifMatch });
+}
+function adaptBucket(raw: R2BucketLike): CollectionBucket {
+  return {
+    async get(key) {
+      const object = await raw.get(key);
+      if (object === null) return null;
+      return {
+        etag: object.httpEtag ?? object.etag ?? null,
+        json: () => object.json(),
+      };
+    },
+    async put(key, value, condition) {
+      const options =
+        condition === undefined ? undefined : { onlyIf: conditionHeaders(condition) };
+      return (await raw.put(key, value, options)) !== null;
+    },
+    async list(prefix) {
+      const page = await raw.list({ prefix });
+      return page.objects.map((object) => object.key ?? "").filter((key) => key !== "");
+    },
+    async delete(key) {
+      await raw.delete(key);
+    },
+  };
+}
+
 async function collect(
   controller: ScheduledController,
-  env: CollectorEnv,
+  bucket: CollectionBucket,
   fetchImpl?: typeof fetch,
 ): Promise<void> {
   const started = Date.now();
@@ -63,7 +118,7 @@ async function collect(
     at: isoInstant(now.getTime()),
   });
 
-  const prior = await readLatestSnapshot(env.SNAPSHOTS);
+  const prior = await readLatestSnapshot(bucket);
   // Data from a previous season must never roll over into the new one.
   const priorForSeason = prior !== null && prior.season === season ? prior : null;
 
@@ -74,8 +129,10 @@ async function collect(
 
   let official: OfficialForecast | null = priorForSeason?.official ?? null;
   let officialOutcome: string;
+  let announcementRows: AnnouncementRow[] = [];
   if (officialFetch.ok) {
-    const parsed = parseOfficialForecast(officialFetch.body, now);
+    const seasons = parseSeasonTables(officialFetch.body);
+    const parsed = parseOfficialForecast(officialFetch.body, now, seasons);
     if (parsed.status === "ok") {
       official = {
         midpoint: parsed.midpoint,
@@ -90,8 +147,13 @@ async function collect(
         retrievedAt: isoInstant(now.getTime()),
         status: "ok",
       };
-      await archive(env.SNAPSHOTS, "official", now, official);
+      await archive(bucket, "official", now, official);
       officialOutcome = "ok";
+      const history = parseAnnouncementHistory(officialFetch.body, seasons);
+      announcementRows =
+        history.status === "ok"
+          ? (history.seasons.find((s) => s.season === season)?.announcements ?? [])
+          : [];
     } else {
       officialOutcome = `unavailable:${parsed.reason}`;
     }
@@ -108,7 +170,7 @@ async function collect(
   if (futuresFetch.ok) {
     const parsedBlock = parseFuturesReference(futuresFetch.body, now, season);
     if (parsedBlock.status === "ok") {
-      await archive(env.SNAPSHOTS, "futures", now, parsedBlock);
+      await archive(bucket, "futures", now, parsedBlock);
       futures = parsedBlock;
       futuresOutcome = "ok";
     } else {
@@ -143,13 +205,39 @@ async function collect(
       futures: futuresCheck(futuresOutcome, futures, checkedAt),
     },
   };
-  await env.SNAPSHOTS.put(LATEST_SNAPSHOT_KEY, JSON.stringify(snapshot));
-  log("collector.publish.succeeded", {
+
+  const outcome = await publishRelease(bucket, {
     season,
-    durationMs: Date.now() - started,
-    officialRetained: officialOutcome !== "ok",
-    futuresRetained: futuresOutcome !== "ok",
+    runId: runIdFromInstant(now.getTime()),
+    collectedAt: checkedAt,
+    snapshot,
+    announcementRows,
+    futures,
   });
+  if (outcome.status === "published") {
+    log("collector.publish.succeeded", {
+      season,
+      runId: outcome.manifest.runId,
+      durationMs: Date.now() - started,
+      officialRetained: officialOutcome !== "ok",
+      futuresRetained: futuresOutcome !== "ok",
+      mirrorUpdated: outcome.mirrorUpdated,
+    });
+  } else {
+    log(`collector.publish.${outcome.status === "failed" ? "failed" : "skipped"}`, {
+      season,
+      reason: outcome.reason,
+    });
+  }
+
+  await cleanupExpiredArchives(bucket, now.getTime());
+}
+
+// Retries reuse the run ID: the same scheduled instant always maps to the
+// same key, so a retry rewrites identical content instead of forking it.
+function runIdFromInstant(epochMs: number): string {
+  const iso = new Date(epochMs).toISOString();
+  return `${iso.slice(0, 10).replace(/-/g, "")}-${iso.slice(11, 19).replace(/:/g, "")}`;
 }
 
 // A published snapshot always carries a valid official value, so its failed
@@ -187,10 +275,6 @@ async function archive(
 
 function isoInstant(epochMs: number): string {
   return new Date(epochMs).toISOString().replace(".000Z", "Z");
-}
-
-function log(event: string, fields: Record<string, unknown>): void {
-  console.log(JSON.stringify({ event, ...fields }));
 }
 
 export default collector;
