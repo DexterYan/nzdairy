@@ -1,16 +1,15 @@
 // Task 17b: current-season history as a native SVG figure plus a dated table
 // equivalent. Design §4: no charting library, no fabricated observations, and
 // every plotted number also exists as text.
-import { aucklandDateOf, aucklandDayStartMs } from "../lib/changes";
-import type { EffectiveTime, HistoryEntry, SeasonHistory } from "../lib/history";
+import {
+  aucklandDateOf,
+  aucklandDayStartMs,
+  bracketOf,
+  earliestDate,
+} from "../lib/changes";
+import { latestRevision, type HistoryEntry, type SeasonHistory } from "../lib/history";
+import { basisLabel, nzDate } from "./format";
 import styles from "./page.module.css";
-
-const nzDate = new Intl.DateTimeFormat("en-NZ", {
-  timeZone: "Pacific/Auckland",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
 
 // en-NZ short months render September as "Sept"; §4's compact labels use "Sep".
 const MONTHS_SHORT = [
@@ -27,13 +26,6 @@ const MONTHS_SHORT = [
   "Nov",
   "Dec",
 ];
-
-const BASIS_LABELS: Record<string, string> = {
-  "bid-offer-midpoint": "bid/offer midpoint",
-  "last-trade": "last trade",
-  "prior-settlement": "prior settlement",
-  announcement: "announcement",
-};
 
 const DAY_MS = 86_400_000;
 const GAP_MS = 72 * 3_600_000;
@@ -54,19 +46,11 @@ interface Plotted {
   high: number | null;
 }
 
-// Unverified instants are not price observations, so they are never plotted.
-function effectiveMs(effective: EffectiveTime): number | null {
-  if (effective.kind === "date") return aucklandDayStartMs(effective.on);
-  return effective.verified ? Date.parse(effective.at) : null;
-}
-
-function plot(entry: HistoryEntry): Plotted | null {
-  const ms = effectiveMs(entry.effective);
-  const latest = entry.revisions[entry.revisions.length - 1];
-  if (ms === null || latest === undefined) return null;
+function plot(entry: HistoryEntry): Plotted {
+  const latest = latestRevision(entry);
   return {
     entry,
-    ms,
+    ms: bracketOf(entry.effective).start,
     value: latest.payload.value,
     low: latest.payload.low,
     high: latest.payload.high,
@@ -85,20 +69,15 @@ export default function HistoryPanel({
   contract: string | null;
 }) {
   const entries = history?.entries ?? [];
-  const official = entries
-    .filter((entry) => entry.series === "official-forecast")
-    .map(plot)
-    .filter((point): point is Plotted => point !== null)
-    .sort((a, b) => a.ms - b.ms);
-  const futures = entries
-    .filter(
-      (entry) =>
-        entry.series === "mkp-futures" &&
-        (contract === null || entry.market === contract),
-    )
-    .map(plot)
-    .filter((point): point is Plotted => point !== null)
-    .sort((a, b) => a.ms - b.ms);
+  const plotted = (keep: (entry: HistoryEntry) => boolean): Plotted[] =>
+    entries
+      .filter(keep)
+      .map(plot)
+      .sort((a, b) => a.ms - b.ms);
+  const official = plotted((e) => e.series === "official-forecast");
+  const futures = plotted(
+    (e) => e.series === "mkp-futures" && (contract === null || e.market === contract),
+  );
 
   if (official.length === 0 && futures.length === 0) {
     return (
@@ -106,7 +85,7 @@ export default function HistoryPanel({
         <h2 id="history-heading" className={styles.cardTitle}>
           Season history
         </h2>
-        <p className={styles.historyNote}>{emptySentence(season, entries)}</p>
+        <p className={styles.historyNote}>{emptySentence(season, history)}</p>
         <p className={styles.historyNote}>
           See the current reference prices above for the latest values.
         </p>
@@ -182,12 +161,14 @@ export default function HistoryPanel({
   if (current.length > 0) segments.push(current);
   const hasBand = official.some((p) => p.low !== null && p.high !== null);
 
-  const rows = [...official, ...futures]
-    .sort((a, b) => b.ms - a.ms || a.entry.identity.localeCompare(b.entry.identity))
-    .map((point) => ({
+  const noted = (series: Plotted[]) =>
+    series.map((point, index) => ({
       point,
-      notes: notesFor(point, official, futures),
+      notes: notesFor(point, index > 0 ? series[index - 1] : undefined),
     }));
+  const rows = [...noted(official), ...noted(futures)].sort(
+    (a, b) => b.point.ms - a.point.ms || a.point.entry.identity.localeCompare(b.point.entry.identity),
+  );
 
   return (
     <section className={styles.history} aria-labelledby="history-heading">
@@ -331,6 +312,7 @@ export default function HistoryPanel({
             {rows.map(({ point, notes }) => (
               <tr key={point.entry.identity}>
                 <td>{fullDate(point)}</td>
+
                 <td>
                   {point.entry.series === "official-forecast"
                     ? "Official forecast"
@@ -348,19 +330,10 @@ export default function HistoryPanel({
   );
 }
 
-function emptySentence(season: string, entries: HistoryEntry[]): string {
-  const earliest = entries
-    .map((entry) => effectiveMs(entry.effective))
-    .filter((ms): ms is number => ms !== null)
-    .sort((a, b) => a - b)[0];
-  const begin =
-    earliest === undefined
-      ? null
-      : nzDate.format(
-          new Date(`${aucklandDateOf(earliest)}T00:00:00Z`),
-        );
+function emptySentence(season: string, history: SeasonHistory | null): string {
+  const begin = earliestDate(history);
   return `History for the ${season} season is still building${
-    begin === null ? "" : ` — observations begin ${begin}`
+    begin === null ? "" : ` — observations begin ${nzDate.format(new Date(`${begin}T00:00:00Z`))}`
   }.`;
 }
 
@@ -433,12 +406,10 @@ function ariaSummary(official: Plotted[], futures: Plotted[]): string {
 }
 
 // Notes surface what the figure shows structurally: gaps, basis transitions
-// and superseded revisions — the numbers behind the breaks.
-function notesFor(point: Plotted, official: Plotted[], futures: Plotted[]): string[] {
+// and superseded revisions — the numbers behind the breaks. `previous` is the
+// point's predecessor in its own series.
+function notesFor(point: Plotted, previous: Plotted | undefined): string[] {
   const notes: string[] = [];
-  const series = point.entry.series === "official-forecast" ? official : futures;
-  const index = series.indexOf(point);
-  const previous = index > 0 ? series[index - 1] : undefined;
   // Announcements are dated events, so gaps between them are expected;
   // only futures observation coverage can actually go missing.
   if (
@@ -492,8 +463,4 @@ function fullDate(point: Plotted): string {
   return effective.kind === "date"
     ? nzDate.format(new Date(`${effective.on}T00:00:00Z`))
     : nzDate.format(new Date(effective.at));
-}
-
-function basisLabel(basis: string): string {
-  return BASIS_LABELS[basis] ?? basis;
 }

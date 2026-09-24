@@ -9,92 +9,13 @@ import {
   minusAucklandCalendarDays,
   officialRevision,
 } from "../lib/changes";
-import {
-  canonicalIdentity,
-  type EffectiveTime,
-  type HistoryEntry,
-  type SeasonHistory,
-} from "../lib/history";
+import type { HistoryEntry } from "../lib/history";
 import type { FuturesBlock, MilkSnapshot } from "../lib/snapshot";
 import type { ChangeOutcome } from "../lib/changes";
+import { ann, entry, fut, futuresBlock, historyOf } from "./helpers/history";
 
 const SEASON = "2026/27";
 const NOW = Date.parse("2026-09-24T06:00:00Z");
-
-function entry(options: {
-  series?: "official-forecast" | "mkp-futures";
-  provider?: string;
-  market?: string;
-  basis?: "bid-offer-midpoint" | "last-trade" | "prior-settlement" | "announcement";
-  effective: EffectiveTime;
-  value: number;
-  low?: number | null;
-  high?: number | null;
-  firstSeenAt?: string;
-}): HistoryEntry {
-  const series = options.series ?? "mkp-futures";
-  const provider = options.provider ?? "nzx";
-  const market = options.market ?? (series === "mkp-futures" ? "MKPU27" : SEASON);
-  const basis = options.basis ?? (series === "mkp-futures" ? "last-trade" : "announcement");
-  return {
-    identity: canonicalIdentity({ series, provider, market, basis, effective: options.effective }),
-    series,
-    provider,
-    market,
-    basis,
-    effective: options.effective,
-    revisions: [
-      {
-        payload: {
-          value: options.value,
-          low: options.low ?? null,
-          high: options.high ?? null,
-          currency: "NZD",
-          unit: "NZD/kgMS",
-        },
-        publishedAt: null,
-        firstSeenAt: options.firstSeenAt ?? "2026-09-01T06:00:00Z",
-        parserVersion: "test",
-      },
-    ],
-  };
-}
-
-const fut = (on: string, value: number, extra: Partial<Parameters<typeof entry>[0]> = {}) =>
-  entry({ effective: { kind: "date", on }, value, ...extra });
-const ann = (on: string, value: number, extra: Partial<Parameters<typeof entry>[0]> = {}) =>
-  entry({ series: "official-forecast", effective: { kind: "date", on }, value, ...extra });
-
-function historyOf(entries: HistoryEntry[], season = SEASON): SeasonHistory {
-  return { schemaVersion: 1, season, materialisedAt: "2026-09-24T06:00:00Z", entries };
-}
-
-function futuresBlock(overrides: Partial<Extract<FuturesBlock, { status: "ok" }>> = {}): FuturesBlock {
-  return {
-    status: "ok",
-    contractCode: "MKPU27",
-    season: SEASON,
-    expiry: "2027-09-30",
-    basis: "last-trade",
-    price: 9.7,
-    bid: null,
-    offer: null,
-    last: 9.7,
-    priorSettlement: null,
-    tradedVolume: null,
-    bidVolume: null,
-    offerVolume: null,
-    openInterest: null,
-    stale: false,
-    currency: "NZD",
-    unit: "NZD/kgMS",
-    quotedAt: "2026-09-24T05:00:00Z",
-    tradedAt: "2026-09-24",
-    retrievedAt: "2026-09-24T06:00:00Z",
-    sourceUrl: "https://www.nzx.com/",
-    ...overrides,
-  };
-}
 
 function snapshotOf(
   overrides: {

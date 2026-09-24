@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import fixtureOfficial from "../fixtures/latest-snapshot.json";
 import historyFixture from "../fixtures/release/history.json";
 import {
   HISTORY_MAX_ENTRIES,
@@ -8,13 +7,13 @@ import {
   historyEligible,
   latestRevision,
   mergeObservation,
+  observationFromAnnouncementRow,
   observationFromFuturesBlock,
-  observationFromOfficialForecast,
   parseSeasonHistory,
   type Observation,
   type SeasonHistory,
 } from "../lib/history";
-import type { FuturesBlock, OfficialForecast } from "../lib/snapshot";
+import { futuresBlock } from "./helpers/history";
 
 const PARSER = "test-1";
 
@@ -50,33 +49,6 @@ function announcementObservation(overrides: Partial<Observation> = {}): Observat
     parserVersion: PARSER,
     ...overrides,
   };
-}
-
-function futuresBlock(overrides: Record<string, unknown>): FuturesBlock {
-  return {
-    status: "ok",
-    contractCode: "MKPU27",
-    season: "2026/27",
-    expiry: "2027-09-30",
-    basis: "last-trade",
-    price: 9.7,
-    bid: null,
-    offer: null,
-    last: 9.7,
-    priorSettlement: null,
-    tradedVolume: 10,
-    bidVolume: null,
-    offerVolume: null,
-    openInterest: 1234,
-    stale: false,
-    currency: "NZD",
-    unit: "NZD/kgMS",
-    quotedAt: "2026-09-21T23:30:00Z",
-    tradedAt: "2026-09-21",
-    retrievedAt: "2026-09-22T06:00:09Z",
-    sourceUrl: "https://www.nzx.com/markets/nzx-dairy-derivatives/quotes/futures/MKP",
-    ...overrides,
-  } as FuturesBlock;
 }
 
 describe("canonicalIdentity", () => {
@@ -207,7 +179,10 @@ describe("mergeObservation", () => {
 
 describe("observationFromFuturesBlock", () => {
   it("produces a dated last-trade observation", () => {
-    const observation = observationFromFuturesBlock(futuresBlock({}), PARSER);
+    const observation = observationFromFuturesBlock(
+      futuresBlock({ tradedAt: "2026-09-21" }),
+      PARSER,
+    );
     expect(observation).not.toBeNull();
     expect(observation?.market).toBe("MKPU27");
     expect(observation?.effective).toEqual({ kind: "date", on: "2026-09-21" });
@@ -243,19 +218,29 @@ describe("observationFromFuturesBlock", () => {
   });
 });
 
-describe("observationFromOfficialForecast", () => {
+describe("observationFromAnnouncementRow", () => {
   it("produces a dated announcement observation under the collected season", () => {
-    const observation = observationFromOfficialForecast(
-      fixtureOfficial.official as OfficialForecast,
+    const observation = observationFromAnnouncementRow(
+      {
+        label: "Forecast Update",
+        date: "2026-09-21",
+        midpoint: 9.5,
+        low: 8.5,
+        high: 10.5,
+        rangeSource: "inline",
+      },
       "2026/27",
+      "2026-09-23T06:00:12Z",
       PARSER,
     );
-    expect(observation?.series).toBe("official-forecast");
-    expect(observation?.market).toBe("2026/27");
-    expect(observation?.effective).toEqual({ kind: "date", on: "2026-09-21" });
-    expect(observation?.payload).toEqual({
+    expect(observation.series).toBe("official-forecast");
+    expect(observation.market).toBe("2026/27");
+    expect(observation.effective).toEqual({ kind: "date", on: "2026-09-21" });
+    expect(observation.payload).toEqual({
       value: 9.5, low: 8.5, high: 10.5, currency: "NZD", unit: "NZD/kgMS",
     });
+    expect(observation.firstSeenAt).toBe("2026-09-23T06:00:12Z");
+    expect(observation.parserVersion).toBe(PARSER);
   });
 });
 
@@ -288,6 +273,14 @@ describe("parseSeasonHistory", () => {
     const invalid = structuredClone(historyFixture);
     invalid.entries[0].revisions[0].payload.low = 9.9;
     expect(parseSeasonHistory(invalid, "2026/27")).toBeNull();
+  });
+
+  it("rejects an unverified instant the write path would never store", () => {
+    const unverified = structuredClone(historyFixture) as SeasonHistory;
+    const entry = unverified.entries[0];
+    entry.effective = { kind: "instant", at: "2026-09-21T23:30:00Z", verified: false };
+    entry.identity = canonicalIdentity(entry);
+    expect(parseSeasonHistory(unverified, "2026/27")).toBeNull();
   });
 
   it("rejects an object beyond the entry budget", () => {

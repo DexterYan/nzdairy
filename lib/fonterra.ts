@@ -48,7 +48,7 @@ function stripTags(html: string): string {
 const PRICE_RE =
   /\$\s*(\d{1,2}\.\d{2})\s*(?:[-–]\s*\$?\s*(\d{1,2}\.\d{2}))?/;
 
-interface ParsedRow {
+export interface ParsedRow {
   label: string;
   date: string;
   midpoint: number | null;
@@ -168,8 +168,9 @@ export function currentSeason(now: Date): string {
 
 // Shared table parsing: every recognisable announcement row of every season
 // table on the page, bucketed per season. The v1 forecast picks its latest
-// priced row; the history extractor walks all of them.
-function parseSeasonTables(html: string): Map<string, ParsedRow[]> {
+// priced row; the history extractor walks all of them. Callers reading both
+// pass one parse through the `seasons` parameter instead of re-walking the page.
+export function parseSeasonTables(html: string): Map<string, ParsedRow[]> {
   const anchor = html.indexOf('id="farmgate-milk-price"');
   const scope = anchor >= 0 ? html.slice(anchor) : html;
 
@@ -293,8 +294,8 @@ function parseSeasonTables(html: string): Map<string, ParsedRow[]> {
 export function parseOfficialForecast(
   html: string,
   now: Date,
+  seasons: Map<string, ParsedRow[]> = parseSeasonTables(html),
 ): OfficialForecastResult {
-  const seasons = parseSeasonTables(html);
 
   if (seasons.size === 0) {
     return { status: "unavailable", reason: "no-forecast-tables" };
@@ -390,8 +391,8 @@ export type AnnouncementHistoryResult =
 // reports only published dates.
 export function parseAnnouncementHistory(
   html: string,
+  seasons: Map<string, ParsedRow[]> = parseSeasonTables(html),
 ): AnnouncementHistoryResult {
-  const seasons = parseSeasonTables(html);
   if (seasons.size === 0) {
     return { status: "unavailable", reason: "no-forecast-tables" };
   }

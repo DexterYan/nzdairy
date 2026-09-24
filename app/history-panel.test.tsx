@@ -3,69 +3,11 @@
 // labels, and full text equivalence for the plotted numbers.
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  canonicalIdentity,
-  type HistoryEntry,
-  type ObservationBasis,
-  type SeasonHistory,
-} from "../lib/history";
+import type { SeasonHistory } from "../lib/history";
+import { ann, entry, fut, historyOf } from "../tests/helpers/history";
 import HistoryPanel from "./history-panel";
 
 afterEach(cleanup);
-
-function entry(options: {
-  series?: "official-forecast" | "mkp-futures";
-  provider?: string;
-  market?: string;
-  basis?: ObservationBasis;
-  effective: { kind: "date"; on: string } | { kind: "instant"; at: string; verified: boolean };
-  value: number;
-  low?: number | null;
-  high?: number | null;
-  earlierValue?: number;
-}): HistoryEntry {
-  const series = options.series ?? "mkp-futures";
-  const provider = options.provider ?? (series === "mkp-futures" ? "nzx" : "fonterra");
-  const market = options.market ?? (series === "mkp-futures" ? "MKPU27" : "2026/27");
-  const basis = options.basis ?? (series === "mkp-futures" ? "last-trade" : "announcement");
-  const payload = {
-    value: options.value,
-    low: options.low ?? null,
-    high: options.high ?? null,
-    currency: "NZD" as const,
-    unit: "NZD/kgMS" as const,
-  };
-  const base = {
-    payload,
-    publishedAt: null,
-    firstSeenAt: "2026-09-01T06:00:00Z",
-    parserVersion: "test",
-  };
-  return {
-    identity: canonicalIdentity({ series, provider, market, basis, effective: options.effective }),
-    series,
-    provider,
-    market,
-    basis,
-    effective: options.effective,
-    revisions:
-      options.earlierValue === undefined
-        ? [base]
-        : [{ ...base, payload: { ...payload, value: options.earlierValue } }, base],
-  };
-}
-
-const fut = (on: string, value: number, extra: Partial<Parameters<typeof entry>[0]> = {}) =>
-  entry({ effective: { kind: "date", on }, value, ...extra });
-const ann = (on: string, value: number, low: number | null, high: number | null) =>
-  entry({ series: "official-forecast", effective: { kind: "date", on }, value, low, high });
-
-const historyOf = (entries: HistoryEntry[]): SeasonHistory => ({
-  schemaVersion: 1,
-  season: "2026/27",
-  materialisedAt: "2026-09-23T06:00:00Z",
-  entries,
-});
 
 function panel(history: SeasonHistory | null, contract: string | null = "MKPU27") {
   render(<HistoryPanel history={history} season="2026/27" contract={contract} />);
@@ -79,8 +21,8 @@ const texts = (selector: string) =>
 // Two announcements with ranges plus three same-basis futures points whose
 // 16→21 Sep gap exceeds 72 h while 13→16 sits exactly on the boundary.
 const FULL = historyOf([
-  ann("2026-08-28", 9.25, 8.75, 9.75),
-  ann("2026-09-21", 9.5, 8.5, 10.5),
+  ann("2026-08-28", 9.25, { low: 8.75, high: 9.75 }),
+  ann("2026-09-21", 9.5, { low: 8.5, high: 10.5 }),
   fut("2026-09-13", 9.6),
   fut("2026-09-16", 9.65),
   fut("2026-09-21", 9.7, { earlierValue: 9.65 }),
@@ -159,7 +101,7 @@ describe("season history section", () => {
   it("keeps the step line alone when no range is published", () => {
     panel(
       historyOf([
-        ann("2026-08-28", 9.25, null, null),
+        ann("2026-08-28", 9.25),
         fut("2026-09-13", 9.6),
         fut("2026-09-16", 9.65),
       ]),
@@ -303,7 +245,7 @@ describe("history empty states", () => {
   });
 
   it("renders announcements alone without futures points", () => {
-    panel(historyOf([ann("2026-08-28", 9.25, 8.75, 9.75)]));
+    panel(historyOf([ann("2026-08-28", 9.25, { low: 8.75, high: 9.75 })]));
 
     expect(qsa("svg circle").length).toBe(0);
     expect(qsa("svg polyline").length).toBe(0);

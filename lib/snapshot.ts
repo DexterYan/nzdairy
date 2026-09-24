@@ -352,7 +352,8 @@ function positiveNumber(value: unknown): number | null {
     : null;
 }
 
-function optionalPositiveNumber(value: unknown): number | null | undefined {
+// undefined = present but invalid; null = legitimately unpublished endpoint.
+export function optionalPositiveNumber(value: unknown): number | null | undefined {
   if (value === null) return null;
   const parsed = positiveNumber(value);
   return parsed === null ? undefined : parsed;

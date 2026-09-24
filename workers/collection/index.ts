@@ -9,6 +9,7 @@ import {
   FONTERA_SOURCE_URL,
   parseAnnouncementHistory,
   parseOfficialForecast,
+  parseSeasonTables,
   type AnnouncementRow,
 } from "../../lib/fonterra";
 import { NZX_SOURCE_URL, parseFuturesReference } from "../../lib/nzx";
@@ -22,6 +23,7 @@ import {
 import { fetchSource } from "./fetch-source";
 import {
   cleanupExpiredArchives,
+  log,
   publishRelease,
   type CollectionBucket,
 } from "./publish";
@@ -129,7 +131,8 @@ async function collect(
   let officialOutcome: string;
   let announcementRows: AnnouncementRow[] = [];
   if (officialFetch.ok) {
-    const parsed = parseOfficialForecast(officialFetch.body, now);
+    const seasons = parseSeasonTables(officialFetch.body);
+    const parsed = parseOfficialForecast(officialFetch.body, now, seasons);
     if (parsed.status === "ok") {
       official = {
         midpoint: parsed.midpoint,
@@ -146,7 +149,7 @@ async function collect(
       };
       await archive(bucket, "official", now, official);
       officialOutcome = "ok";
-      const history = parseAnnouncementHistory(officialFetch.body);
+      const history = parseAnnouncementHistory(officialFetch.body, seasons);
       announcementRows =
         history.status === "ok"
           ? (history.seasons.find((s) => s.season === season)?.announcements ?? [])
@@ -272,10 +275,6 @@ async function archive(
 
 function isoInstant(epochMs: number): string {
   return new Date(epochMs).toISOString().replace(".000Z", "Z");
-}
-
-function log(event: string, fields: Record<string, unknown>): void {
-  console.log(JSON.stringify({ event, ...fields }));
 }
 
 export default collector;

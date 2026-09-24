@@ -4,20 +4,18 @@
 // arithmetic resolves in Pacific/Auckland, including DST boundaries.
 
 import {
+  FUTURES_PROVIDER,
   latestRevision,
   type EffectiveTime,
   type HistoryEntry,
   type SeasonHistory,
 } from "./history";
 import type { MilkSnapshot } from "./snapshot";
-import { CHECK_STALE_AFTER_MS, QUOTE_OLD_AFTER_MS } from "./freshness";
+import { QUOTE_OLD_AFTER_MS, referenceCause } from "./freshness";
 
 // "Since last week" cuts off seven Auckland calendar days before the endpoint
 // anchor and accepts a baseline up to seven further days back.
 const LOOKBACK_DAYS = 7;
-
-// The v1 futures block has no provider field; NZX is structural there.
-const V1_FUTURES_PROVIDER = "nzx";
 
 export type ChangeSuppressionReason =
   | "insufficient-history"
@@ -79,7 +77,7 @@ export function futuresChanges(input: {
 
   const futures = snapshot.futures;
   if (futures === undefined || futures.status !== "ok") {
-    return { weekly: notFresh(), sinceAnnouncement: notFresh() };
+    return both(notFresh());
   }
 
   const seasonHistory =
@@ -97,25 +95,23 @@ export function futuresChanges(input: {
   // Freshness gates precede comparability: an untrustworthy current reference
   // suppresses the summary whatever the baseline looks like.
   if (!endpointTreatedFresh(snapshot, futures, endpoint, nowMs)) {
-    return { weekly: notFresh(), sinceAnnouncement: notFresh() };
+    return both(notFresh());
   }
   const observationsBegin = earliestDate(seasonHistory);
   if (endpoint === null) {
-    return {
-      weekly: insufficient(observationsBegin),
-      sinceAnnouncement: insufficient(observationsBegin),
-    };
+    return both(insufficient(observationsBegin));
   }
 
-  if (endpoint.basis !== futures.basis || endpoint.provider !== V1_FUTURES_PROVIDER) {
+  if (endpoint.basis !== futures.basis || endpoint.provider !== FUTURES_PROVIDER) {
     // The latest historical observation is not the reference being displayed.
-    const outcome = diverged(
-      endpoint,
-      { basis: futures.basis, provider: V1_FUTURES_PROVIDER },
-      effectiveDate(endpoint.effective),
-      observationsBegin,
+    return both(
+      diverged(
+        endpoint,
+        { basis: futures.basis, provider: FUTURES_PROVIDER },
+        effectiveDate(endpoint.effective),
+        observationsBegin,
+      ),
     );
-    return { weekly: outcome, sinceAnnouncement: outcome };
   }
 
   const weekly = baselineOutcome(
@@ -142,14 +138,7 @@ export function futuresChanges(input: {
 // no-change notices never reach history, so they cannot reset anything.
 export function officialRevision(history: SeasonHistory | null): OfficialRevision | null {
   if (history === null) return null;
-  const announcements = history.entries
-    .filter(
-      (e) =>
-        e.series === "official-forecast" &&
-        e.basis === "announcement" &&
-        e.market === history.season,
-    )
-    .sort((a, b) => bracketOf(a.effective).end - bracketOf(b.effective).end);
+  const announcements = seasonAnnouncements(history);
   if (announcements.length < 2) return null;
 
   const latest = announcements[announcements.length - 1];
@@ -181,18 +170,23 @@ function announcedPrice(
   };
 }
 
-function selectEndpoint(pool: HistoryEntry[], displayedBasis: string): HistoryEntry | null {
-  if (pool.length === 0) return null;
+// Entries sharing the latest bracket end — same-instant observations.
+function latestTied(entries: HistoryEntry[]): HistoryEntry[] {
   let bestEnd = -Infinity;
-  for (const e of pool) {
+  for (const e of entries) {
     bestEnd = Math.max(bestEnd, bracketOf(e.effective).end);
   }
-  const tied = pool.filter((e) => bracketOf(e.effective).end === bestEnd);
+  return entries.filter((e) => bracketOf(e.effective).end === bestEnd);
+}
+
+function selectEndpoint(pool: HistoryEntry[], displayedBasis: string): HistoryEntry | null {
+  if (pool.length === 0) return null;
   // Same-instant observations of different bases are ambiguous; prefer the
   // one matching the displayed reference and let a mismatch suppress below.
+  const tied = latestTied(pool);
   return (
     tied.find(
-      (e) => e.basis === displayedBasis && e.provider === V1_FUTURES_PROVIDER,
+      (e) => e.basis === displayedBasis && e.provider === FUTURES_PROVIDER,
     ) ?? tied[0]
   );
 }
@@ -213,11 +207,7 @@ function baselineOutcome(
   );
   if (candidates.length === 0) return insufficient(observationsBegin);
 
-  let bestEnd = -Infinity;
-  for (const c of candidates) {
-    bestEnd = Math.max(bestEnd, bracketOf(c.effective).end);
-  }
-  const tied = candidates.filter((e) => bracketOf(e.effective).end === bestEnd);
+  const tied = latestTied(candidates);
   const ambiguous = tied.find(
     (e) => e.basis !== endpoint.basis || e.provider !== endpoint.provider,
   );
@@ -235,11 +225,12 @@ function baselineOutcome(
 
   // An intervening basis/provider change (A→B→A) suppresses the pair even
   // though endpoint and baseline match.
+  const baselineEnd = bracketOf(baseline.effective).end;
   const intervening = pool.find((e) => {
     if (e === endpoint || e === baseline) return false;
     const b = bracketOf(e.effective);
     return (
-      b.end > bracketOf(baseline.effective).end &&
+      b.end > baselineEnd &&
       b.start < endpointStart &&
       (e.basis !== endpoint.basis || e.provider !== endpoint.provider)
     );
@@ -279,24 +270,27 @@ function diverged(
 }
 
 function announcementCutoffMs(history: SeasonHistory): number | null {
-  let best: HistoryEntry | null = null;
-  let bestEnd = -Infinity;
-  for (const e of history.entries) {
-    if (e.series !== "official-forecast" || e.basis !== "announcement") continue;
-    if (e.market !== history.season) continue;
-    const end = bracketOf(e.effective).end;
-    if (end > bestEnd) {
-      bestEnd = end;
-      best = e;
-    }
-  }
-  if (best === null) return null;
-  return bracketOf(best.effective).start;
+  const announcements = seasonAnnouncements(history);
+  return announcements.length === 0
+    ? null
+    : bracketOf(announcements[announcements.length - 1].effective).start;
 }
 
-// Mirrors the card's request-time rules: failed/retained check, stale check
-// (retrieval fallback), old displayed quote, or an effective endpoint past
-// 72 h — a date-only endpoint ages from the start of its Auckland day.
+// The season's priced announcements, oldest bracket first.
+function seasonAnnouncements(history: SeasonHistory): HistoryEntry[] {
+  return history.entries
+    .filter(
+      (e) =>
+        e.series === "official-forecast" &&
+        e.basis === "announcement" &&
+        e.market === history.season,
+    )
+    .sort((a, b) => bracketOf(a.effective).end - bracketOf(b.effective).end);
+}
+
+// The shared request-time ladder plus one gate the cards cannot see: an
+// effective endpoint past 72 h — a date-only endpoint ages from the start of
+// its Auckland day.
 function endpointTreatedFresh(
   snapshot: MilkSnapshot,
   futures: Extract<MilkSnapshot["futures"], { status: "ok" }>,
@@ -304,29 +298,27 @@ function endpointTreatedFresh(
   nowMs: number,
 ): boolean {
   const check = snapshot.checks?.futures;
-  if (check !== undefined && check.outcome !== "ok") return false;
-  const checkAt = check?.checkedAt ?? futures.retrievedAt;
-  if (nowMs - Date.parse(checkAt) > CHECK_STALE_AFTER_MS) return false;
-  if (futures.quotedAt !== null && nowMs - Date.parse(futures.quotedAt) > QUOTE_OLD_AFTER_MS) {
-    return false;
-  }
-  if (endpoint !== null && nowMs - bracketOf(endpoint.effective).start > QUOTE_OLD_AFTER_MS) {
-    return false;
-  }
-  return true;
+  const cause = referenceCause(
+    check,
+    check?.checkedAt ?? futures.retrievedAt,
+    futures.quotedAt,
+    nowMs,
+  );
+  if (cause !== null) return false;
+  return endpoint === null || nowMs - bracketOf(endpoint.effective).start <= QUOTE_OLD_AFTER_MS;
 }
 
 function pointOf(entry: HistoryEntry): ObservationPoint {
   return { effective: entry.effective, value: latestRevision(entry).payload.value };
 }
 
-function effectiveDate(effective: EffectiveTime): string {
+export function effectiveDate(effective: EffectiveTime): string {
   return effective.kind === "date"
     ? effective.on
     : aucklandDateOf(Date.parse(effective.at));
 }
 
-function earliestDate(history: SeasonHistory | null): string | null {
+export function earliestDate(history: SeasonHistory | null): string | null {
   if (history === null || history.entries.length === 0) return null;
   let best = history.entries[0];
   let bestStart = Infinity;
@@ -348,17 +340,31 @@ function notFresh(): ChangeOutcome {
   return { status: "suppressed", reason: "endpoint-not-fresh", transition: null, observationsBegin: null };
 }
 
+function both(outcome: ChangeOutcome): FuturesChanges {
+  return { weekly: outcome, sinceAnnouncement: outcome };
+}
+
+// Every pass over the pool re-derives brackets; the memo keeps one entry at
+// one pair of ICU timezone conversions per request.
+const bracketCache = new WeakMap<EffectiveTime, { start: number; end: number }>();
+
 // A date-only observation covers its whole Auckland day, so its bracket runs
 // from local midnight to the next; an instant is the point itself.
-function bracketOf(effective: EffectiveTime): { start: number; end: number } {
+export function bracketOf(effective: EffectiveTime): { start: number; end: number } {
+  const cached = bracketCache.get(effective);
+  if (cached !== undefined) return cached;
+  let bracket: { start: number; end: number };
   if (effective.kind === "date") {
-    return {
+    bracket = {
       start: aucklandDayStartMs(effective.on),
       end: aucklandDayStartMs(shiftIsoDate(effective.on, 1)),
     };
+  } else {
+    const at = Date.parse(effective.at);
+    bracket = { start: at, end: at };
   }
-  const at = Date.parse(effective.at);
-  return { start: at, end: at };
+  bracketCache.set(effective, bracket);
+  return bracket;
 }
 
 const AKL_TIME_ZONE = "Pacific/Auckland";

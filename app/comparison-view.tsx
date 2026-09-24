@@ -1,15 +1,14 @@
 import {
-  aucklandDateOf,
   aucklandDayStartMs,
+  effectiveDate,
   futuresChanges,
   officialRevision,
   type ChangeOutcome,
-  type ObservationPoint,
   type OfficialRevision,
 } from "../lib/changes";
 import type { SeasonHistory } from "../lib/history";
 import { Fragment, type ReactNode } from "react";
-import { freshness } from "../lib/freshness";
+import { freshness, referenceCause, type ReferenceCause } from "../lib/freshness";
 import type { ReadProvenance } from "../lib/release";
 import type {
   FuturesBlock,
@@ -19,16 +18,10 @@ import type {
   SourceCheck,
 } from "../lib/snapshot";
 import ComparisonStrip from "./comparison-strip";
+import { basisLabel, nzDate } from "./format";
 import HistoryPanel from "./history-panel";
 import RevenuePanel, { type Movement } from "./revenue-panel";
 import styles from "./page.module.css";
-
-const nzDate = new Intl.DateTimeFormat("en-NZ", {
-  timeZone: "Pacific/Auckland",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
 
 const nzDateTime = new Intl.DateTimeFormat("en-NZ", {
   timeZone: "Pacific/Auckland",
@@ -47,18 +40,11 @@ const BASIS_TAGS: Record<QuoteBasis, string> = {
   "prior-settlement": "PRIOR SETTLE",
 };
 
-// Human labels for transition sentences; unknown bases keep their stored id.
-const BASIS_LABELS: Record<string, string> = {
-  "bid-offer-midpoint": "bid/offer midpoint",
-  "last-trade": "last trade",
-  "prior-settlement": "prior settlement",
-};
-
 export default function ComparisonView({
   snapshot,
   nowMs,
   provenance = "unknown",
-  history,
+  history = null,
 }: {
   snapshot: MilkSnapshot | null;
   nowMs?: number;
@@ -73,11 +59,11 @@ export default function ComparisonView({
   // eslint-disable-next-line react-hooks/purity
   const now = nowMs ?? Date.now();
   const changes = futuresChanges({
-    history: history ?? null,
+    history,
     snapshot,
     nowMs: now,
   });
-  const revision = officialRevision(history ?? null);
+  const revision = officialRevision(history);
   const movements =
     changes === null
       ? undefined
@@ -120,7 +106,7 @@ export default function ComparisonView({
               movements={movements}
             />
             <HistoryPanel
-              history={history ?? null}
+              history={history}
               season={snapshot.season}
               contract={
                 snapshot.futures !== undefined && snapshot.futures.status === "ok"
@@ -449,12 +435,11 @@ function WhatChanged({
     );
   }
   if (revision !== null) {
+    const sentence = revisionSentence(revision);
     entries.push({
       key: "revision",
-      plain: revisionSentence(revision),
-      node: (
-        <p className={styles.changeEntry}>{revisionSentence(revision)}</p>
-      ),
+      plain: sentence,
+      node: <p className={styles.changeEntry}>{sentence}</p>,
     });
   }
   // Both periods can suppress with the same sentence (e.g. a basis change);
@@ -491,8 +476,8 @@ function periodEntry(
     const { endpoint, baseline, delta } = outcome;
     const endPrice = `$${endpoint.value.toFixed(2)}`;
     const basePrice = `$${baseline.value.toFixed(2)}`;
-    const endDate = displayDate(pointDate(endpoint));
-    const baseDate = displayDate(pointDate(baseline));
+    const endDate = displayDate(effectiveDate(endpoint.effective));
+    const baseDate = displayDate(effectiveDate(baseline.effective));
     const words =
       delta > 0
         ? `up $${Math.abs(delta).toFixed(2)}`
@@ -559,24 +544,28 @@ function suppressionSentence(
   return `Not enough collected history yet to compare with ${withWhom}${begin === null ? "" : ` — observations begin ${displayDate(begin)}`}.`;
 }
 
-// Mirrors the endpoint freshness gates: which trust problem suppressed the
-// summary, in the order the gates apply.
+// Wording for the shared freshness ladder; the endpoint-age gate in
+// lib/changes has no sentence of its own and falls back to the old-quote text.
+const NOT_FRESH_LABELS: Record<ReferenceCause, string> = {
+  "retained-value": "a retained value",
+  "failed-check": "a failed check",
+  "stale-check": "a stale check",
+  "old-quote": "an old quote",
+};
+
 function notFreshCause(snapshot: MilkSnapshot, now: number): string {
   const futures = snapshot.futures;
+  const ok = futures !== undefined && futures.status === "ok";
   const check = snapshot.checks?.futures;
-  if (check !== undefined && check.outcome === "retained") {
-    return "a retained value";
-  }
-  if (check !== undefined && check.outcome === "unavailable") {
-    return "a failed check";
-  }
-  const fallbackAt =
-    futures !== undefined && futures.status === "ok"
-      ? futures.retrievedAt
-      : snapshot.collectedAt;
-  const { checkStale } = freshness(null, check?.checkedAt ?? fallbackAt, now);
-  if (checkStale) return "a stale check";
-  return "an old quote";
+  const fallbackAt = ok ? futures.retrievedAt : snapshot.collectedAt;
+  return NOT_FRESH_LABELS[
+    referenceCause(
+      check,
+      check?.checkedAt ?? fallbackAt,
+      ok ? futures.quotedAt : null,
+      now,
+    ) ?? "old-quote"
+  ];
 }
 
 function revisionSentence(revision: OfficialRevision): string {
@@ -599,20 +588,10 @@ function movementOf(label: string, outcome: ChangeOutcome): Movement | null {
   return {
     label,
     delta: outcome.delta,
-    since: displayDate(pointDate(outcome.baseline)),
+    since: displayDate(effectiveDate(outcome.baseline.effective)),
   };
-}
-
-function pointDate(point: ObservationPoint): string {
-  return point.effective.kind === "date"
-    ? point.effective.on
-    : aucklandDateOf(Date.parse(point.effective.at));
 }
 
 function displayDate(isoDate: string): string {
   return nzDate.format(new Date(`${isoDate}T00:00:00Z`));
-}
-
-function basisLabel(basis: string): string {
-  return BASIS_LABELS[basis] ?? basis;
 }

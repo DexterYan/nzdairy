@@ -2,7 +2,7 @@
 // latest.json v1 path is untouched; releases add immutable per-run objects, a
 // small manifest, and a separate optional context object.
 
-import { parseSeasonHistory, type SeasonHistory } from "./history";
+import { isoInstant, parseSeasonHistory, type SeasonHistory } from "./history";
 import { parseSnapshot, type MilkSnapshot } from "./snapshot";
 
 export const CURRENT_RELEASE_KEY = "current-release.json";
@@ -142,27 +142,33 @@ export async function readRelease(storage: ReleaseReader): Promise<ReleaseRead> 
     return legacyRead(storage);
   }
 
-  const currentSnapshot = await readSnapshot(storage, manifest.current.snapshotKey);
+  // Independent keys: read the pair in parallel; a bad snapshot just discards
+  // the speculative history read.
+  const [currentSnapshot, currentHistory] = await Promise.all([
+    readSnapshot(storage, manifest.current.snapshotKey),
+    readHistoryFor(storage, manifest.current.historyKey, manifest.season),
+  ]);
   if (currentSnapshot !== null && currentSnapshot.season === manifest.season) {
-    const history = await readHistoryFor(storage, manifest.current.historyKey, manifest.season);
     return {
       kind: "release",
       manifest,
       snapshot: currentSnapshot,
-      history,
+      history: currentHistory,
       provenance: manifest.provenance,
     };
   }
 
   if (manifest.previous !== null) {
-    const previousSnapshot = await readSnapshot(storage, manifest.previous.snapshotKey);
+    const [previousSnapshot, previousHistory] = await Promise.all([
+      readSnapshot(storage, manifest.previous.snapshotKey),
+      readHistoryFor(storage, manifest.previous.historyKey, manifest.season),
+    ]);
     if (previousSnapshot !== null && previousSnapshot.season === manifest.season) {
-      const history = await readHistoryFor(storage, manifest.previous.historyKey, manifest.season);
       return {
         kind: "release",
         manifest,
         snapshot: previousSnapshot,
-        history,
+        history: previousHistory,
         provenance: manifest.provenance,
       };
     }
@@ -187,7 +193,7 @@ export async function conditionalPut(
   );
 }
 
-async function readJson(storage: ReleaseReader, key: string): Promise<unknown | null> {
+export async function readJson(storage: ReleaseReader, key: string): Promise<unknown | null> {
   try {
     const object = await storage.get(key);
     if (object === null) return null;
@@ -347,11 +353,4 @@ export function contextCardFreshness(card: ContextCard, nowMs: number): ContextF
   }
   const dueMs = Date.parse(card.nextExpectedAt) + card.graceMs;
   return { schedule: "known", overdue: nowMs > dueMs };
-}
-
-function isoInstant(value: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.test(value)) {
-    return null;
-  }
-  return Number.isNaN(Date.parse(value)) ? null : value;
 }

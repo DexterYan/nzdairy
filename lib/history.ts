@@ -2,16 +2,17 @@
 // revision rules, and the season-bounded history object. The legacy v1
 // snapshot is untouched; history lives in a separate companion object.
 
-import type {
-  FuturesBlock,
-  OfficialForecast,
-  QuoteBasis,
-} from "./snapshot";
+import { optionalPositiveNumber } from "./snapshot";
+import type { FuturesBlock, QuoteBasis } from "./snapshot";
+import type { AnnouncementRow } from "./fonterra";
 
 // Budgets fixed by Task 14: one season of daily observations is ~730 entries;
 // readers reject larger objects rather than trust them.
 export const HISTORY_MAX_ENTRIES = 2_000;
 export const HISTORY_MAX_REVISIONS = 50;
+
+// The v1 futures block has no provider field; NZX is structural there.
+export const FUTURES_PROVIDER = "nzx";
 
 export type ObservationSeries = "official-forecast" | "mkp-futures";
 
@@ -104,21 +105,14 @@ function payloadEquals(
 }
 
 // undefined = present but invalid; null = legitimately unpublished endpoint.
-function endpointOrNull(value: unknown): number | null | undefined {
-  if (value === null) return null;
-  return typeof value === "number" && Number.isFinite(value) && value > 0
-    ? value
-    : undefined;
-}
-
 function validPayload(payload: unknown): payload is ObservationPayload {
   if (typeof payload !== "object" || payload === null) return false;
   const candidate = payload as Record<string, unknown>;
   if (typeof candidate.value !== "number" || !Number.isFinite(candidate.value) || candidate.value <= 0) {
     return false;
   }
-  const low = endpointOrNull(candidate.low);
-  const high = endpointOrNull(candidate.high);
+  const low = optionalPositiveNumber(candidate.low);
+  const high = optionalPositiveNumber(candidate.high);
   if (low === undefined || high === undefined) return false;
   if (candidate.currency !== "NZD" || candidate.unit !== "NZD/kgMS") return false;
   if (low !== null && high !== null && (low > candidate.value || candidate.value > high)) {
@@ -234,6 +228,9 @@ export function parseSeasonHistory(
       basis !== "prior-settlement" && basis !== "announcement"
     ) return null;
     if (!validEffective(entry.effective)) return null;
+    // Unverified instants are not observations (Task 13a); the write path
+    // never stores one, so a reader seeing one rejects the object.
+    if (entry.effective.kind === "instant" && !entry.effective.verified) return null;
 
     if (!Array.isArray(entry.revisions) || entry.revisions.length === 0 ||
       entry.revisions.length > HISTORY_MAX_REVISIONS) {
@@ -304,7 +301,7 @@ export function observationFromFuturesBlock(
   if (futures.tradedAt === null) return null;
   return {
     series: "mkp-futures",
-    provider: "nzx",
+    provider: FUTURES_PROVIDER,
     market: futures.contractCode,
     basis: "last-trade",
     effective: { kind: "date", on: futures.tradedAt.slice(0, 10) },
@@ -321,12 +318,12 @@ export function observationFromFuturesBlock(
   };
 }
 
-// The v1 official block carries no season of its own, so the caller supplies
-// the season it collected under; the market period for announcements is that
-// season.
-export function observationFromOfficialForecast(
-  official: OfficialForecast,
+// A dated announcement row becomes an observation under the season it was
+// collected in; first-seen belongs to the run that first retrieved the row.
+export function observationFromAnnouncementRow(
+  row: AnnouncementRow,
   season: string,
+  firstSeenAt: string,
   parserVersion: string,
 ): Observation {
   return {
@@ -334,21 +331,21 @@ export function observationFromOfficialForecast(
     provider: "fonterra",
     market: season,
     basis: "announcement",
-    effective: { kind: "date", on: official.announcedAt.slice(0, 10) },
+    effective: { kind: "date", on: row.date },
     payload: {
-      value: official.midpoint,
-      low: official.low,
-      high: official.high,
+      value: row.midpoint,
+      low: row.low,
+      high: row.high,
       currency: "NZD",
       unit: "NZD/kgMS",
     },
     publishedAt: null,
-    firstSeenAt: official.retrievedAt,
+    firstSeenAt,
     parserVersion,
   };
 }
 
-function isoInstant(value: string): string | null {
+export function isoInstant(value: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.test(value)) {
     return null;
   }

@@ -6,24 +6,24 @@
 import type { AnnouncementRow } from "../../lib/fonterra";
 import {
   mergeObservation,
+  observationFromAnnouncementRow,
   observationFromFuturesBlock,
   parseSeasonHistory,
-  type Observation,
   type SeasonHistory,
 } from "../../lib/history";
 import {
   conditionalPut,
   CURRENT_RELEASE_KEY,
   parseReleaseManifest,
+  readJson,
   releaseKeys,
-  type PutCondition,
   type ReleaseManifest,
+  type ReleaseStorage,
 } from "../../lib/release";
 import {
   LATEST_SNAPSHOT_KEY,
   type FuturesBlock,
   type MilkSnapshot,
-  type SnapshotObject,
 } from "../../lib/snapshot";
 
 export const OFFICIAL_PARSER_VERSION = "fonterra-1";
@@ -34,9 +34,7 @@ const MIRROR_ATTEMPTS = 2;
 
 // Condition-native storage surface the collector code targets; the R2 binding
 // adapter in index.ts translates to onlyIf headers.
-export interface CollectionBucket {
-  get(key: string): Promise<(SnapshotObject & { etag: string | null }) | null>;
-  put(key: string, value: string, condition?: PutCondition): Promise<boolean>;
+export interface CollectionBucket extends ReleaseStorage {
   list(prefix: string): Promise<string[]>;
   delete(key: string): Promise<void>;
 }
@@ -164,7 +162,7 @@ async function buildHistory(
   for (const row of input.announcementRows) {
     history = mergeObservation(
       history,
-      announcementObservation(row, input.season, input.collectedAt),
+      observationFromAnnouncementRow(row, input.season, input.collectedAt, OFFICIAL_PARSER_VERSION),
     ).history;
   }
   const futuresObservation = observationFromFuturesBlock(input.futures, FUTURES_PARSER_VERSION);
@@ -172,30 +170,6 @@ async function buildHistory(
     history = mergeObservation(history, futuresObservation).history;
   }
   return { ...history, materialisedAt: input.collectedAt };
-}
-
-function announcementObservation(
-  row: AnnouncementRow,
-  season: string,
-  firstSeenAt: string,
-): Observation {
-  return {
-    series: "official-forecast",
-    provider: "fonterra",
-    market: season,
-    basis: "announcement",
-    effective: { kind: "date", on: row.date },
-    payload: {
-      value: row.midpoint,
-      low: row.low,
-      high: row.high,
-      currency: "NZD",
-      unit: "NZD/kgMS",
-    },
-    publishedAt: null,
-    firstSeenAt,
-    parserVersion: OFFICIAL_PARSER_VERSION,
-  };
 }
 
 // Best-effort mirror: a failure is logged and retried once, never fatal — old
@@ -232,16 +206,6 @@ async function readManifest(
     manifest = null;
   }
   return { etag: object.etag, manifest };
-}
-
-async function readJson(bucket: CollectionBucket, key: string): Promise<unknown | null> {
-  try {
-    const object = await bucket.get(key);
-    if (object === null) return null;
-    return await object.json();
-  } catch {
-    return null;
-  }
 }
 
 function newer(a: string, b: string): boolean {
@@ -283,6 +247,7 @@ export async function cleanupExpiredArchives(
   return expired.length;
 }
 
-function log(event: string, fields: Record<string, unknown>): void {
+// One structured JSON line per event (docs/operations.md); index.ts shares it.
+export function log(event: string, fields: Record<string, unknown>): void {
   console.log(JSON.stringify({ event, ...fields }));
 }

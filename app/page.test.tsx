@@ -2,13 +2,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import fixture from "../fixtures/latest-snapshot.json";
 import historyFixture from "../fixtures/release/history.json";
-import {
-  canonicalIdentity,
-  type HistoryEntry,
-  type SeasonHistory,
-} from "../lib/history";
+import type { SeasonHistory } from "../lib/history";
 import type { ReadProvenance } from "../lib/release";
 import type { FuturesBlock, MilkSnapshot } from "../lib/snapshot";
+import { ann, fut, historyOf } from "../tests/helpers/history";
 import ComparisonView from "./comparison-view";
 
 afterEach(cleanup);
@@ -32,63 +29,6 @@ const lastTradeSnapshot: MilkSnapshot = {
     tradedAt: "2026-09-21",
   },
 };
-
-function futEntry(on: string, value: number): HistoryEntry {
-  return {
-    identity: canonicalIdentity({
-      series: "mkp-futures",
-      provider: "nzx",
-      market: "MKPU27",
-      basis: "last-trade",
-      effective: { kind: "date", on },
-    }),
-    series: "mkp-futures",
-    provider: "nzx",
-    market: "MKPU27",
-    basis: "last-trade",
-    effective: { kind: "date", on },
-    revisions: [
-      {
-        payload: { value, low: null, high: null, currency: "NZD", unit: "NZD/kgMS" },
-        publishedAt: null,
-        firstSeenAt: "2026-09-01T06:00:00Z",
-        parserVersion: "test",
-      },
-    ],
-  };
-}
-
-function annEntry(on: string, value: number, low: number, high: number): HistoryEntry {
-  return {
-    identity: canonicalIdentity({
-      series: "official-forecast",
-      provider: "fonterra",
-      market: "2026/27",
-      basis: "announcement",
-      effective: { kind: "date", on },
-    }),
-    series: "official-forecast",
-    provider: "fonterra",
-    market: "2026/27",
-    basis: "announcement",
-    effective: { kind: "date", on },
-    revisions: [
-      {
-        payload: { value, low, high, currency: "NZD", unit: "NZD/kgMS" },
-        publishedAt: null,
-        firstSeenAt: "2026-09-01T06:00:00Z",
-        parserVersion: "test",
-      },
-    ],
-  };
-}
-
-const historyOf = (entries: HistoryEntry[]): SeasonHistory => ({
-  schemaVersion: 1,
-  season: "2026/27",
-  materialisedAt: "2026-09-23T06:00:00Z",
-  entries,
-});
 
 function view(
   withSnapshot: MilkSnapshot | null = snapshot,
@@ -919,10 +859,10 @@ describe("what changed", () => {
       FIXED_NOW,
       undefined,
       historyOf([
-        annEntry("2026-08-28", 9.25, 8.75, 9.75),
-        futEntry("2026-08-27", 9.5),
-        futEntry("2026-09-13", 9.6),
-        futEntry("2026-09-21", 9.7),
+        ann("2026-08-28", 9.25, { low: 8.75, high: 9.75 }),
+        fut("2026-08-27", 9.5),
+        fut("2026-09-13", 9.6),
+        fut("2026-09-21", 9.7),
       ]),
     );
 
@@ -947,7 +887,7 @@ describe("what changed", () => {
       lastTradeSnapshot,
       FIXED_NOW,
       undefined,
-      historyOf([futEntry("2026-09-13", 9.6), futEntry("2026-09-21", 9.7)]),
+      historyOf([fut("2026-09-13", 9.6), fut("2026-09-21", 9.7)]),
     );
 
     expect(screen.getByRole("region", { name: "What changed" })).toBeDefined();
@@ -958,7 +898,7 @@ describe("what changed", () => {
       lastTradeSnapshot,
       FIXED_NOW,
       undefined,
-      historyOf([futEntry("2026-09-13", 9.5), futEntry("2026-09-21", 9.7)]),
+      historyOf([fut("2026-09-13", 9.5), fut("2026-09-21", 9.7)]),
     );
     expect(screen.getByText("up $0.20").className).toContain("changeDeltaUp");
 
@@ -967,7 +907,7 @@ describe("what changed", () => {
       lastTradeSnapshot,
       FIXED_NOW,
       undefined,
-      historyOf([futEntry("2026-09-13", 9.9), futEntry("2026-09-21", 9.7)]),
+      historyOf([fut("2026-09-13", 9.9), fut("2026-09-21", 9.7)]),
     );
     expect(
       screen.getByText(
@@ -984,7 +924,7 @@ describe("what changed", () => {
       lastTradeSnapshot,
       FIXED_NOW,
       undefined,
-      historyOf([futEntry("2026-09-13", 9.7), futEntry("2026-09-21", 9.7)]),
+      historyOf([fut("2026-09-13", 9.7), fut("2026-09-21", 9.7)]),
     );
 
     expect(
@@ -1099,7 +1039,7 @@ describe("what changed", () => {
       snapshot,
       FIXED_NOW,
       undefined,
-      historyOf([annEntry("2026-08-28", 9.25, 8.75, 9.75)]),
+      historyOf([ann("2026-08-28", 9.25, { low: 8.75, high: 9.75 })]),
     );
 
     expect(
@@ -1150,10 +1090,10 @@ describe("what changed", () => {
 
 describe("movement tiles", () => {
   const movementHistory = historyOf([
-    annEntry("2026-08-28", 9.25, 8.75, 9.75),
-    futEntry("2026-08-27", 9.4),
-    futEntry("2026-09-13", 9.5),
-    futEntry("2026-09-21", 9.7),
+    ann("2026-08-28", 9.25, { low: 8.75, high: 9.75 }),
+    fut("2026-08-27", 9.4),
+    fut("2026-09-13", 9.5),
+    fut("2026-09-21", 9.7),
   ]);
 
   function enterProduction(value: string) {

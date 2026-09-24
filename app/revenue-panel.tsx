@@ -316,7 +316,45 @@ export default function RevenuePanel({
   );
 }
 
-// The delta carries sign, word, and colour — three channels, never colour alone.
+// The signed-value contract: sign, word, and colour carry direction — never
+// colour alone; below half a dollar the rounded figure shows NZ$0.
+function SignedTile({
+  label,
+  difference,
+  captionFor,
+}: {
+  label: string;
+  difference: number;
+  captionFor: (up: boolean) => string;
+}) {
+  if (Math.abs(difference) < 0.5) {
+    return (
+      <div className={styles.tile}>
+        <dt className={styles.tileLabel}>{label}</dt>
+        <dd className={styles.tileValue}>{formatRevenue(0)}</dd>
+        <dd className={styles.tileCaption}>
+          The revenue difference rounds to NZ$0.
+        </dd>
+      </div>
+    );
+  }
+  const up = difference > 0;
+  return (
+    <div className={styles.tile}>
+      <dt className={styles.tileLabel}>{label}</dt>
+      <dd
+        className={`${styles.tileValue} ${
+          up ? styles.tileValueUp : styles.tileValueDown
+        }`}
+      >
+        {up ? "+" : "-"}
+        {formatRevenue(Math.abs(difference))}
+      </dd>
+      <dd className={styles.tileCaption}>{captionFor(up)}</dd>
+    </div>
+  );
+}
+
 function DeltaTile({
   futuresRevenue,
   officialRevenue,
@@ -324,40 +362,15 @@ function DeltaTile({
   futuresRevenue: number;
   officialRevenue: number;
 }) {
-  const difference = futuresRevenue - officialRevenue;
-  // Below half a dollar the rounded figures show no difference at all.
-  if (Math.abs(difference) < 0.5) {
-    return (
-      <div className={styles.tile}>
-        <dt className={styles.tileLabel}>Futures vs official</dt>
-        <dd className={styles.tileValue}>{formatRevenue(0)}</dd>
-        <dd className={styles.tileCaption}>
-          The revenue difference rounds to NZ$0.
-        </dd>
-      </div>
-    );
-  }
-  const above = difference > 0;
   return (
-    <div className={styles.tile}>
-      <dt className={styles.tileLabel}>Futures vs official</dt>
-      <dd
-        className={`${styles.tileValue} ${
-          above ? styles.tileValueUp : styles.tileValueDown
-        }`}
-      >
-        {above ? "+" : "-"}
-        {formatRevenue(Math.abs(difference))}
-      </dd>
-      <dd className={styles.tileCaption}>
-        {above ? "above" : "below"} the official forecast
-      </dd>
-    </div>
+    <SignedTile
+      label="Futures vs official"
+      difference={futuresRevenue - officialRevenue}
+      captionFor={(up) => `${up ? "above" : "below"} the official forecast`}
+    />
   );
 }
 
-// Same signed-value contract as DeltaTile: sign, word, and colour, never
-// colour alone; below half a dollar the rounded figure shows NZ$0.
 function MovementTile({
   movement,
   production,
@@ -365,35 +378,15 @@ function MovementTile({
   movement: Movement;
   production: number;
 }) {
-  const difference = grossRevenue(production, Math.abs(movement.delta));
-  const up = movement.delta > 0;
-  if (difference < 0.5) {
-    return (
-      <div className={styles.tile}>
-        <dt className={styles.tileLabel}>{movement.label}</dt>
-        <dd className={styles.tileValue}>{formatRevenue(0)}</dd>
-        <dd className={styles.tileCaption}>
-          The revenue difference rounds to NZ$0.
-        </dd>
-      </div>
-    );
-  }
+  const magnitude = grossRevenue(production, Math.abs(movement.delta));
   return (
-    <div className={styles.tile}>
-      <dt className={styles.tileLabel}>{movement.label}</dt>
-      <dd
-        className={`${styles.tileValue} ${
-          up ? styles.tileValueUp : styles.tileValueDown
-        }`}
-      >
-        {up ? "+" : "-"}
-        {formatRevenue(difference)}
-      </dd>
-      <dd className={styles.tileCaption}>
-        {up ? "+" : "-"}${Math.abs(movement.delta).toFixed(2)}/kgMS since{" "}
-        {movement.since} at your production
-      </dd>
-    </div>
+    <SignedTile
+      label={movement.label}
+      difference={movement.delta > 0 ? magnitude : -magnitude}
+      captionFor={(up) =>
+        `${up ? "+" : "-"}$${Math.abs(movement.delta).toFixed(2)}/kgMS since ${movement.since} at your production`
+      }
+    />
   );
 }
 
